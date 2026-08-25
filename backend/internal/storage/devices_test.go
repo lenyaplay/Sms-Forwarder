@@ -36,6 +36,29 @@ func TestCreateAndGetDevice(t *testing.T) {
 	}
 }
 
+func TestGetDeviceByUploadToken(t *testing.T) {
+	db := newTestDB(t)
+	ctx := context.Background()
+
+	owner, _ := CreateUser(ctx, db, "owner-tok1", "hash")
+	device, err := CreateDevice(ctx, db, owner.ID, "Device", "upload-tok-lookup", sql.NullTime{})
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+
+	found, err := GetDeviceByUploadToken(ctx, db, "upload-tok-lookup")
+	if err != nil {
+		t.Fatalf("GetDeviceByUploadToken: %v", err)
+	}
+	if found.ID != device.ID {
+		t.Errorf("GetDeviceByUploadToken = %+v, want device %d", found, device.ID)
+	}
+
+	if _, err := GetDeviceByUploadToken(ctx, db, "unknown-token"); err != ErrDeviceNotFound {
+		t.Errorf("got err=%v, want ErrDeviceNotFound", err)
+	}
+}
+
 func TestGetDeviceByID_NotFound(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()

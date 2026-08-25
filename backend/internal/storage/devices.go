@@ -49,6 +49,20 @@ func GetDeviceByID(ctx context.Context, db *sql.DB, id int64) (Device, error) {
 	return d, nil
 }
 
+func GetDeviceByUploadToken(ctx context.Context, db *sql.DB, uploadToken string) (Device, error) {
+	var d Device
+	err := db.QueryRowContext(ctx,
+		"SELECT id, owner_user_id, name, upload_token, upload_token_expires_at, hmac_secret, created_at FROM devices WHERE upload_token = ?", uploadToken).
+		Scan(&d.ID, &d.OwnerUserID, &d.Name, &d.UploadToken, &d.UploadTokenExpiresAt, &d.HMACSecret, &d.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Device{}, ErrDeviceNotFound
+	}
+	if err != nil {
+		return Device{}, err
+	}
+	return d, nil
+}
+
 func ListOwnedDevices(ctx context.Context, db *sql.DB, ownerUserID int64) ([]Device, error) {
 	rows, err := db.QueryContext(ctx,
 		"SELECT id, owner_user_id, name, upload_token, upload_token_expires_at, hmac_secret, created_at FROM devices WHERE owner_user_id = ? ORDER BY id", ownerUserID)

@@ -11,6 +11,7 @@ type Config struct {
 	JWTSecret       string
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
+	LogLevel        string
 }
 
 func Load() Config {
@@ -20,6 +21,7 @@ func Load() Config {
 		JWTSecret:       getEnv("JWT_SECRET", "dev-secret-change-me"),
 		AccessTokenTTL:  15 * time.Minute,
 		RefreshTokenTTL: 30 * 24 * time.Hour,
+		LogLevel:        getEnv("LOG_LEVEL", "info"),
 	}
 }
 

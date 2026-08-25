@@ -1,15 +1,26 @@
 package handlers
 
 import (
+	"bytes"
 	"database/sql"
+	"io"
+	"log/slog"
 	"net/http"
+	"time"
 
 	"sms_forwarder/backend/internal/config"
+	"sms_forwarder/backend/internal/logging"
 	"sms_forwarder/backend/internal/services"
 )
 
 // NewRouter wires up all HTTP routes.
 func NewRouter(db *sql.DB, cfg config.Config) http.Handler {
+	return NewRouterWithLogger(db, cfg, logging.New(cfg.LogLevel))
+}
+
+// NewRouterWithLogger is like NewRouter but takes an explicit logger, so
+// tests can capture log output instead of writing to stdout.
+func NewRouterWithLogger(db *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", healthCheck(db))
@@ -33,7 +44,62 @@ func NewRouter(db *sql.DB, cfg config.Config) http.Handler {
 	mux.Handle("DELETE /devices/{id}/download_tokens/{token_id}", requireAuth(revokeDownloadTokenHandler(deviceService)))
 	mux.Handle("POST /devices/bindings", requireAuth(addBindingHandler(deviceService)))
 
-	return mux
+	messageService := services.NewMessageService(db)
+	mux.Handle("POST /webhook", withBodyLogging(logger, webhookHandler(messageService)))
+
+	return requestLogger(logger, mux)
+}
+
+// requestLogger logs method, path, status, duration and (if authenticated)
+// user_id for every request at info level. At debug level it additionally
+// logs the redacted query string. See docs/specs/0004-request-logging.md.
+func requestLogger(logger *slog.Logger, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		r, holder := withUserIDHolder(r)
+		sw := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r)
+
+		attrs := []any{
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", sw.status,
+			"duration_ms", time.Since(start).Milliseconds(),
+		}
+		if holder.ok {
+			attrs = append(attrs, "user_id", holder.id)
+		}
+		if logger.Enabled(r.Context(), slog.LevelDebug) && r.URL.RawQuery != "" {
+			attrs = append(attrs, "query", logging.RedactQuery(r.URL.RawQuery))
+		}
+		logger.Info("request", attrs...)
+	})
+}
+
+// withBodyLogging logs the (redacted) request body at debug level before
+// delegating to next. Kept separate from requestLogger because only a few
+// routes (currently the webhook) have request bodies worth logging.
+func withBodyLogging(logger *slog.Logger, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if logger.Enabled(r.Context(), slog.LevelDebug) {
+			body, err := io.ReadAll(r.Body)
+			if err == nil {
+				logger.Debug("request body", "path", r.URL.Path, "body", logging.RedactJSONBody(body))
+				r.Body = io.NopCloser(bytes.NewReader(body))
+			}
+		}
+		next(w, r)
+	}
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
 }
 
 func healthCheck(db *sql.DB) http.HandlerFunc {

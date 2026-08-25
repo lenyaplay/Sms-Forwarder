@@ -11,6 +11,27 @@ import (
 type contextKey string
 
 const userIDContextKey contextKey = "userID"
+const userIDHolderContextKey contextKey = "userIDHolder"
+
+// userIDHolder lets a middleware wrapping RequireAuth from the outside (e.g.
+// request logging) observe the authenticated user ID after the inner handler
+// runs. Plain context values set by RequireAuth don't work for this: they're
+// attached to a new *http.Request created by r.WithContext and passed only to
+// handlers further down the chain, never back up to an outer *http.Request
+// variable. The holder is a pointer, so mutating the value it points to is
+// visible to whoever attached it, regardless of how deep it's mutated.
+type userIDHolder struct {
+	id int64
+	ok bool
+}
+
+// withUserIDHolder attaches a fresh holder to the request context and
+// returns the updated request along with the holder to read after
+// next.ServeHTTP returns.
+func withUserIDHolder(r *http.Request) (*http.Request, *userIDHolder) {
+	h := &userIDHolder{}
+	return r.WithContext(context.WithValue(r.Context(), userIDHolderContextKey, h)), h
+}
 
 // RequireAuth validates the "Authorization: Bearer <access token>" header and
 // stores the authenticated user ID in the request context. Not wired to any
@@ -32,6 +53,10 @@ func RequireAuth(jwtSecret string) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), userIDContextKey, userID)
+			if holder, ok := ctx.Value(userIDHolderContextKey).(*userIDHolder); ok {
+				holder.id = userID
+				holder.ok = true
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

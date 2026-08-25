@@ -27,11 +27,13 @@
 
 ## Milestone 3 — Приём SMS (webhook)
 
-- [ ] Эндпоинт приёма webhook от Gateway App: валидация `upload_token`
-- [ ] Опциональная проверка подписи `X-Signature` (HMAC-SHA256)
-- [ ] Дедупликация повторных доставок (Gateway App повторяет отправку до 10 раз)
-- [ ] Сохранение сообщений в `messages`
+- [x] Эндпоинт приёма webhook от Gateway App: валидация `upload_token`
+- [x] Опциональная проверка подписи `X-Signature` (HMAC-SHA256)
+- [x] Дедупликация повторных доставок (Gateway App повторяет отправку до 10 раз)
+- [x] Сохранение сообщений в `messages`
 - [ ] Ручное end-to-end тестирование с реальным приложением-шлюзом на устройстве
+
+См. [спецификацию 0003-sms-webhook](specs/0003-sms-webhook.md).
 
 ## Milestone 4 — REST API для просмотра
 
