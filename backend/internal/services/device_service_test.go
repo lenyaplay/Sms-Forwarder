@@ -222,3 +222,44 @@ func TestDeviceService_AddViewerBinding_Scenarios(t *testing.T) {
 		t.Errorf("duplicate binding: got err=%v, want ErrViewerBindingExists", err)
 	}
 }
+
+func TestDeviceService_GetDevice_ViewerAccessLostWhenTokenExpires(t *testing.T) {
+	svc, db := newTestDeviceService(t)
+	ctx := context.Background()
+	owner := registerUser(t, db, "owner-viewer-ttl")
+	viewer := registerUser(t, db, "viewer-ttl")
+
+	device, err := svc.CreateDevice(ctx, owner, "Device", nil)
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+
+	token, err := svc.CreateDownloadToken(ctx, owner, device.ID, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateDownloadToken: %v", err)
+	}
+	if _, _, err := svc.AddViewerBinding(ctx, viewer, token.Token); err != nil {
+		t.Fatalf("AddViewerBinding: %v", err)
+	}
+
+	if _, role, err := svc.GetDevice(ctx, viewer, device.ID); err != nil || role != "viewer" {
+		t.Fatalf("GetDevice before expiry: role=%q, err=%v, want role=viewer, err=nil", role, err)
+	}
+
+	// Backdate the token's expiry directly (avoids sleeping in the test).
+	if _, err := db.Exec("UPDATE device_download_tokens SET expires_at = ? WHERE id = ?", time.Now().UTC().Add(-time.Hour), token.ID); err != nil {
+		t.Fatalf("backdate token: %v", err)
+	}
+
+	if _, _, err := svc.GetDevice(ctx, viewer, device.ID); err != ErrDeviceNotFound {
+		t.Errorf("GetDevice after token expiry: got err=%v, want ErrDeviceNotFound", err)
+	}
+
+	owned, viewerDevices, err := svc.ListDevices(ctx, viewer)
+	if err != nil {
+		t.Fatalf("ListDevices: %v", err)
+	}
+	if len(owned) != 0 || len(viewerDevices) != 0 {
+		t.Errorf("ListDevices after token expiry = owned:%+v viewer:%+v, want both empty", owned, viewerDevices)
+	}
+}

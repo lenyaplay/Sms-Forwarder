@@ -18,6 +18,7 @@ var (
 	ErrInvalidSignature   = errors.New("missing or invalid X-Signature")
 	ErrMissingSender      = errors.New("from is required")
 	ErrMissingText        = errors.New("text is required")
+	ErrInvalidDateRange   = errors.New("since must not be after until")
 )
 
 type MessageService struct {
@@ -83,6 +84,35 @@ func (s *MessageService) IngestWebhook(ctx context.Context, uploadToken string, 
 	}
 
 	return created, false, nil
+}
+
+type ListMessagesInput struct {
+	Since    *time.Time
+	Until    *time.Time
+	BeforeID *int64
+	Limit    int
+}
+
+// ListMessages returns messages for deviceID visible to userID (owner or
+// viewer, checked via deviceSvc.GetDevice), applying pagination and optional
+// date filters. Returns storage.ErrDeviceNotFound if the device doesn't
+// exist or userID has no relation to it.
+func (s *MessageService) ListMessages(ctx context.Context, deviceSvc *DeviceService, userID, deviceID int64, in ListMessagesInput) ([]storage.Message, error) {
+	if in.Since != nil && in.Until != nil && in.Since.After(*in.Until) {
+		return nil, ErrInvalidDateRange
+	}
+
+	if _, _, err := deviceSvc.GetDevice(ctx, userID, deviceID); err != nil {
+		return nil, err
+	}
+
+	return storage.ListMessagesForDevice(ctx, s.db, storage.ListMessagesParams{
+		DeviceID: deviceID,
+		BeforeID: in.BeforeID,
+		Since:    in.Since,
+		Until:    in.Until,
+		Limit:    in.Limit,
+	})
 }
 
 func validSignature(secret string, rawBody []byte, signature string) bool {

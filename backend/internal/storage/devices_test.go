@@ -113,6 +113,36 @@ func TestListOwnedAndViewerDevices(t *testing.T) {
 	}
 }
 
+func TestListViewerDevices_ExcludesExpiredTokenBinding(t *testing.T) {
+	db := newTestDB(t)
+	ctx := context.Background()
+
+	owner, _ := CreateUser(ctx, db, "owner-exp-viewer", "hash")
+	viewer, _ := CreateUser(ctx, db, "viewer-exp", "hash")
+
+	device, err := CreateDevice(ctx, db, owner.ID, "Device", "tok-exp-viewer", sql.NullTime{})
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+
+	expired := sql.NullTime{Time: time.Now().UTC().Add(-time.Hour), Valid: true}
+	token, err := CreateDownloadToken(ctx, db, device.ID, "dl-tok-exp", sql.NullString{}, expired)
+	if err != nil {
+		t.Fatalf("CreateDownloadToken: %v", err)
+	}
+	if _, err := CreateViewerBinding(ctx, db, device.ID, viewer.ID, token.ID); err != nil {
+		t.Fatalf("CreateViewerBinding: %v", err)
+	}
+
+	viewerDevices, err := ListViewerDevices(ctx, db, viewer.ID)
+	if err != nil {
+		t.Fatalf("ListViewerDevices: %v", err)
+	}
+	if len(viewerDevices) != 0 {
+		t.Errorf("ListViewerDevices = %+v, want empty (binding's token expired)", viewerDevices)
+	}
+}
+
 func TestUpdateDeviceName(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()

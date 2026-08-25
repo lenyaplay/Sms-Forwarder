@@ -74,3 +74,57 @@ func GetMessageByDeviceAndBodyHash(ctx context.Context, db *sql.DB, deviceID int
 	}
 	return m, nil
 }
+
+// ListMessagesParams configures ListMessagesForDevice. BeforeID, Since and
+// Until are optional (nil = no bound). Limit is not validated here; callers
+// must pass a value already checked to be in range.
+type ListMessagesParams struct {
+	DeviceID int64
+	BeforeID *int64
+	Since    *time.Time
+	Until    *time.Time
+	Limit    int
+}
+
+// ListMessagesForDevice returns up to p.Limit messages for p.DeviceID, newest
+// first (ORDER BY id DESC), using idx_messages_device_id_id (device_id, id)
+// for the device_id + keyset (BeforeID) portion of the query.
+func ListMessagesForDevice(ctx context.Context, db *sql.DB, p ListMessagesParams) ([]Message, error) {
+	query := `SELECT id, device_id, sender, text, sent_stamp, received_stamp, sim, body_hash, created_at
+		FROM messages WHERE device_id = ?`
+	args := []interface{}{p.DeviceID}
+
+	if p.BeforeID != nil {
+		query += " AND id < ?"
+		args = append(args, *p.BeforeID)
+	}
+	if p.Since != nil {
+		query += " AND created_at >= ?"
+		args = append(args, *p.Since)
+	}
+	if p.Until != nil {
+		query += " AND created_at <= ?"
+		args = append(args, *p.Until)
+	}
+	query += " ORDER BY id DESC LIMIT ?"
+	args = append(args, p.Limit)
+
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	messages := make([]Message, 0)
+	for rows.Next() {
+		var m Message
+		if err := rows.Scan(&m.ID, &m.DeviceID, &m.Sender, &m.Text, &m.SentStamp, &m.ReceivedStamp, &m.SIM, &m.BodyHash, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		messages = append(messages, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return messages, nil
+}

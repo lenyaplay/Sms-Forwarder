@@ -46,6 +46,7 @@ func NewRouterWithLogger(db *sql.DB, cfg config.Config, logger *slog.Logger) htt
 
 	messageService := services.NewMessageService(db)
 	mux.Handle("POST /webhook", withBodyLogging(logger, webhookHandler(messageService)))
+	mux.Handle("GET /devices/{id}/messages", requireAuth(listMessagesHandler(messageService, deviceService)))
 
 	return requestLogger(logger, mux)
 }

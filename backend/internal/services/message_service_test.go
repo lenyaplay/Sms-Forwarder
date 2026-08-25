@@ -183,3 +183,123 @@ func TestMessageService_IngestWebhook_NoHMACSecretIgnoresSignatureHeader(t *test
 		t.Errorf("expected success when device has no hmac_secret regardless of signature header, got %v", err)
 	}
 }
+
+func TestMessageService_ListMessages_OwnerSeesMessages(t *testing.T) {
+	svc, db := newTestMessageService(t)
+	deviceSvc := NewDeviceService(db)
+	ctx := context.Background()
+	owner := registerUser(t, db, "list-svc-owner1")
+
+	device, err := deviceSvc.CreateDevice(ctx, owner, "Device", nil)
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+	if _, _, err := svc.IngestWebhook(ctx, device.UploadToken, []byte(`{"from":"+1","text":"hi"}`), "", IncomingMessage{From: "+1", Text: "hi"}); err != nil {
+		t.Fatalf("IngestWebhook: %v", err)
+	}
+
+	messages, err := svc.ListMessages(ctx, deviceSvc, owner, device.ID, ListMessagesInput{Limit: 50})
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("messages = %+v, want 1", messages)
+	}
+}
+
+func TestMessageService_ListMessages_ViewerWithBindingSeesMessages(t *testing.T) {
+	svc, db := newTestMessageService(t)
+	deviceSvc := NewDeviceService(db)
+	ctx := context.Background()
+	owner := registerUser(t, db, "list-svc-owner2")
+	viewer := registerUser(t, db, "list-svc-viewer2")
+
+	device, err := deviceSvc.CreateDevice(ctx, owner, "Device", nil)
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+	token, err := deviceSvc.CreateDownloadToken(ctx, owner, device.ID, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateDownloadToken: %v", err)
+	}
+	if _, _, err := deviceSvc.AddViewerBinding(ctx, viewer, token.Token); err != nil {
+		t.Fatalf("AddViewerBinding: %v", err)
+	}
+	if _, _, err := svc.IngestWebhook(ctx, device.UploadToken, []byte(`{"from":"+1","text":"hi"}`), "", IncomingMessage{From: "+1", Text: "hi"}); err != nil {
+		t.Fatalf("IngestWebhook: %v", err)
+	}
+
+	messages, err := svc.ListMessages(ctx, deviceSvc, viewer, device.ID, ListMessagesInput{Limit: 50})
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("messages = %+v, want 1", messages)
+	}
+}
+
+func TestMessageService_ListMessages_ViewerLosesAccessWhenTokenExpires(t *testing.T) {
+	svc, db := newTestMessageService(t)
+	deviceSvc := NewDeviceService(db)
+	ctx := context.Background()
+	owner := registerUser(t, db, "list-svc-owner5")
+	viewer := registerUser(t, db, "list-svc-viewer5")
+
+	device, err := deviceSvc.CreateDevice(ctx, owner, "Device", nil)
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+	token, err := deviceSvc.CreateDownloadToken(ctx, owner, device.ID, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateDownloadToken: %v", err)
+	}
+	if _, _, err := deviceSvc.AddViewerBinding(ctx, viewer, token.Token); err != nil {
+		t.Fatalf("AddViewerBinding: %v", err)
+	}
+	if _, _, err := svc.IngestWebhook(ctx, device.UploadToken, []byte(`{"from":"+1","text":"hi"}`), "", IncomingMessage{From: "+1", Text: "hi"}); err != nil {
+		t.Fatalf("IngestWebhook: %v", err)
+	}
+
+	if _, err := db.Exec("UPDATE device_download_tokens SET expires_at = ? WHERE id = ?", time.Now().UTC().Add(-time.Hour), token.ID); err != nil {
+		t.Fatalf("backdate token: %v", err)
+	}
+
+	if _, err := svc.ListMessages(ctx, deviceSvc, viewer, device.ID, ListMessagesInput{Limit: 50}); err != storage.ErrDeviceNotFound {
+		t.Errorf("got err=%v, want storage.ErrDeviceNotFound (token expired)", err)
+	}
+}
+
+func TestMessageService_ListMessages_UnrelatedUserNotFound(t *testing.T) {
+	svc, db := newTestMessageService(t)
+	deviceSvc := NewDeviceService(db)
+	ctx := context.Background()
+	owner := registerUser(t, db, "list-svc-owner3")
+	stranger := registerUser(t, db, "list-svc-stranger3")
+
+	device, err := deviceSvc.CreateDevice(ctx, owner, "Device", nil)
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+
+	if _, err := svc.ListMessages(ctx, deviceSvc, stranger, device.ID, ListMessagesInput{Limit: 50}); err != storage.ErrDeviceNotFound {
+		t.Errorf("got err=%v, want storage.ErrDeviceNotFound", err)
+	}
+}
+
+func TestMessageService_ListMessages_InvalidDateRange(t *testing.T) {
+	svc, db := newTestMessageService(t)
+	deviceSvc := NewDeviceService(db)
+	ctx := context.Background()
+	owner := registerUser(t, db, "list-svc-owner4")
+
+	device, err := deviceSvc.CreateDevice(ctx, owner, "Device", nil)
+	if err != nil {
+		t.Fatalf("CreateDevice: %v", err)
+	}
+
+	since := time.Now().UTC()
+	until := since.Add(-time.Hour)
+	if _, err := svc.ListMessages(ctx, deviceSvc, owner, device.ID, ListMessagesInput{Since: &since, Until: &until, Limit: 50}); err != ErrInvalidDateRange {
+		t.Errorf("got err=%v, want ErrInvalidDateRange", err)
+	}
+}

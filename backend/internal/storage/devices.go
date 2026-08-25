@@ -73,12 +73,18 @@ func ListOwnedDevices(ctx context.Context, db *sql.DB, ownerUserID int64) ([]Dev
 	return scanDevices(rows)
 }
 
+// ListViewerDevices returns devices the user has an active viewer_binding
+// for. A binding is active only if its originating download_token is not
+// expired (revocation is enforced separately: RevokeDownloadToken deletes the
+// viewer_bindings row outright, so a revoked token's bindings never appear
+// here regardless of this expiry check).
 func ListViewerDevices(ctx context.Context, db *sql.DB, userID int64) ([]Device, error) {
 	rows, err := db.QueryContext(ctx,
 		`SELECT d.id, d.owner_user_id, d.name, d.upload_token, d.upload_token_expires_at, d.hmac_secret, d.created_at
 		 FROM devices d
 		 JOIN viewer_bindings vb ON vb.device_id = d.id
-		 WHERE vb.user_id = ?
+		 JOIN device_download_tokens t ON t.id = vb.download_token_id
+		 WHERE vb.user_id = ? AND (t.expires_at IS NULL OR t.expires_at > CURRENT_TIMESTAMP)
 		 ORDER BY d.id`, userID)
 	if err != nil {
 		return nil, err
