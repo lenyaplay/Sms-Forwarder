@@ -19,9 +19,11 @@
 
 ## Milestone 2 — Устройства и токены
 
-- [ ] CRUD для `devices`: регистрация устройства-шлюза
-- [ ] Генерация, ревокация и перевыпуск `upload_token`
-- [ ] `viewer_bindings`: выдача и отзыв `download_token` для привязки просматривающих аккаунтов к устройству
+- [x] CRUD для `devices`: регистрация устройства-шлюза
+- [x] Генерация, ревокация и перевыпуск `upload_token`
+- [x] `viewer_bindings`: выдача и отзыв `download_token` для привязки просматривающих аккаунтов к устройству
+
+См. [спецификацию 0002-devices-tokens](specs/0002-devices-tokens.md).
 
 ## Milestone 3 — Приём SMS (webhook)
 

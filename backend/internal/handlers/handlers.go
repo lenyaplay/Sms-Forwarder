@@ -20,6 +20,19 @@ func NewRouter(db *sql.DB, cfg config.Config) http.Handler {
 	mux.HandleFunc("POST /auth/refresh", refreshHandler(authService))
 	mux.HandleFunc("POST /auth/logout", logoutHandler(authService))
 
+	deviceService := services.NewDeviceService(db)
+	requireAuth := RequireAuth(cfg.JWTSecret)
+	mux.Handle("POST /devices", requireAuth(createDeviceHandler(deviceService)))
+	mux.Handle("GET /devices", requireAuth(listDevicesHandler(deviceService)))
+	mux.Handle("GET /devices/{id}", requireAuth(getDeviceHandler(deviceService)))
+	mux.Handle("PATCH /devices/{id}", requireAuth(renameDeviceHandler(deviceService)))
+	mux.Handle("DELETE /devices/{id}", requireAuth(deleteDeviceHandler(deviceService)))
+	mux.Handle("POST /devices/{id}/upload_token", requireAuth(reissueUploadTokenHandler(deviceService)))
+	mux.Handle("POST /devices/{id}/download_tokens", requireAuth(createDownloadTokenHandler(deviceService)))
+	mux.Handle("GET /devices/{id}/download_tokens", requireAuth(listDownloadTokensHandler(deviceService)))
+	mux.Handle("DELETE /devices/{id}/download_tokens/{token_id}", requireAuth(revokeDownloadTokenHandler(deviceService)))
+	mux.Handle("POST /devices/bindings", requireAuth(addBindingHandler(deviceService)))
+
 	return mux
 }
 
