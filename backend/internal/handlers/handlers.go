@@ -10,8 +10,14 @@ import (
 
 	"sms_forwarder/backend/internal/config"
 	"sms_forwarder/backend/internal/logging"
+	"sms_forwarder/backend/internal/realtime"
 	"sms_forwarder/backend/internal/services"
 )
+
+// eventsHeartbeatInterval is how often GET /events sends a keep-alive SSE
+// comment on an idle connection, per docs/specs/0006-realtime-delivery.md
+// assumption 10.
+const eventsHeartbeatInterval = 30 * time.Second
 
 // NewRouter wires up all HTTP routes.
 func NewRouter(db *sql.DB, cfg config.Config) http.Handler {
@@ -44,9 +50,11 @@ func NewRouterWithLogger(db *sql.DB, cfg config.Config, logger *slog.Logger) htt
 	mux.Handle("DELETE /devices/{id}/download_tokens/{token_id}", requireAuth(revokeDownloadTokenHandler(deviceService)))
 	mux.Handle("POST /devices/bindings", requireAuth(addBindingHandler(deviceService)))
 
-	messageService := services.NewMessageService(db)
+	hub := realtime.NewHub()
+	messageService := services.NewMessageService(db, hub)
 	mux.Handle("POST /webhook", withBodyLogging(logger, webhookHandler(messageService)))
 	mux.Handle("GET /devices/{id}/messages", requireAuth(listMessagesHandler(messageService, deviceService)))
+	mux.Handle("GET /events", eventsHandler(deviceService, hub, cfg.JWTSecret, eventsHeartbeatInterval))
 
 	return requestLogger(logger, mux)
 }
@@ -101,6 +109,14 @@ type statusRecorder struct {
 func (r *statusRecorder) WriteHeader(status int) {
 	r.status = status
 	r.ResponseWriter.WriteHeader(status)
+}
+
+// Flush passes through to the underlying ResponseWriter's http.Flusher, so
+// streaming responses (SSE, /events) work through this wrapper.
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func healthCheck(db *sql.DB) http.HandlerFunc {

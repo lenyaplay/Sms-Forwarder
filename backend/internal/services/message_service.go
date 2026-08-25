@@ -21,12 +21,23 @@ var (
 	ErrInvalidDateRange   = errors.New("since must not be after until")
 )
 
-type MessageService struct {
-	db *sql.DB
+// EventPublisher is the narrow interface MessageService needs to broadcast
+// newly ingested messages for realtime delivery (see
+// docs/specs/0006-realtime-delivery.md). Implemented by *realtime.Hub;
+// declared here rather than importing realtime directly to keep the
+// dependency direction one-way (services doesn't depend on handlers-adjacent
+// transport packages).
+type EventPublisher interface {
+	Publish(deviceID int64, msg storage.Message)
 }
 
-func NewMessageService(db *sql.DB) *MessageService {
-	return &MessageService{db: db}
+type MessageService struct {
+	db        *sql.DB
+	publisher EventPublisher
+}
+
+func NewMessageService(db *sql.DB, publisher EventPublisher) *MessageService {
+	return &MessageService{db: db, publisher: publisher}
 }
 
 type IncomingMessage struct {
@@ -83,6 +94,7 @@ func (s *MessageService) IngestWebhook(ctx context.Context, uploadToken string, 
 		return storage.Message{}, false, err
 	}
 
+	s.publisher.Publish(device.ID, created)
 	return created, false, nil
 }
 

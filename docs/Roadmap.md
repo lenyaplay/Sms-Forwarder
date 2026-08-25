@@ -44,8 +44,10 @@
 
 ## Milestone 5 — Realtime-доставка
 
-- [ ] WebSocket (или SSE) эндпоинт для push новых сообщений подписанным клиентам
-- [ ] Fallback на REST-поллинг при разрыве соединения
+- [x] WebSocket (или SSE) эндпоинт для push новых сообщений подписанным клиентам
+- [x] Fallback на REST-поллинг при разрыве соединения (клиентское поведение поверх уже существующего `GET /devices/{id}/messages?since=`)
+
+См. [спецификацию 0006-realtime-delivery](specs/0006-realtime-delivery.md).
 
 ## Milestone 6 — Android Viewer App (MVP)
 

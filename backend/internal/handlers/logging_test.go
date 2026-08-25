@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -129,6 +130,45 @@ func TestLogging_DebugLevel_RedactsTokenButShowsRestOfQueryAndBody(t *testing.T)
 	}
 	if !strings.Contains(logOutput, "visible at debug") || !strings.Contains(logOutput, "+1999888777") {
 		t.Errorf("debug-level log should show non-secret body fields: %s", logOutput)
+	}
+}
+
+func TestLogging_Events_AccessTokenQueryParamNeverLogged(t *testing.T) {
+	server, buf := newTestServerWithLogLevel(t, "debug")
+	ownerToken := registerAndGetAccessToken(t, server.URL, "log-owner-events")
+	resp, body := doJSON(t, http.MethodPost, server.URL+"/devices", ownerToken, map[string]interface{}{"name": "Phone"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create device: status = %d, body = %v", resp.StatusCode, body)
+	}
+	deviceID := int64(body["id"].(float64))
+	buf.Reset()
+
+	eventsResp, err := http.Get(fmt.Sprintf("%s/events?device_ids=%d&access_token=%s", server.URL, deviceID, ownerToken))
+	if err != nil {
+		t.Fatalf("GET /events: %v", err)
+	}
+	if eventsResp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", eventsResp.StatusCode)
+	}
+	// Closing the body cancels the request context, which makes the
+	// long-lived /events handler return and requestLogger write its log
+	// line — poll briefly for that to happen.
+	eventsResp.Body.Close()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && !strings.Contains(buf.String(), `"path":"/events"`) {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, `"path":"/events"`) {
+		t.Fatalf("no log line for /events request within timeout: %s", logOutput)
+	}
+	if strings.Contains(logOutput, ownerToken) {
+		t.Errorf("log leaked raw access_token: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, "[REDACTED]") {
+		t.Errorf("debug-level log missing [REDACTED] marker for access_token: %s", logOutput)
 	}
 }
 

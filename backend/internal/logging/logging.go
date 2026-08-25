@@ -15,6 +15,7 @@ import (
 var secretQueryParams = map[string]bool{
 	"upload_token":   true,
 	"download_token": true,
+	"access_token":   true,
 }
 
 // secretJSONFields are JSON object field names never written to logs in the clear.

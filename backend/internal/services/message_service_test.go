@@ -6,15 +6,41 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"sync"
 	"testing"
 	"time"
 
 	"sms_forwarder/backend/internal/storage"
 )
 
+// fakePublisher is a test double for EventPublisher, recording every
+// Publish call so tests can assert IngestWebhook publishes on a fresh
+// insert and not on a deduplicated retry.
+type fakePublisher struct {
+	mu     sync.Mutex
+	events []publishedEvent
+}
+
+type publishedEvent struct {
+	DeviceID int64
+	Msg      storage.Message
+}
+
+func (p *fakePublisher) Publish(deviceID int64, msg storage.Message) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.events = append(p.events, publishedEvent{DeviceID: deviceID, Msg: msg})
+}
+
+func (p *fakePublisher) count() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.events)
+}
+
 func newTestMessageService(t *testing.T) (*MessageService, *sql.DB) {
 	db := newTestDB(t)
-	return NewMessageService(db), db
+	return NewMessageService(db, &fakePublisher{}), db
 }
 
 func createTestDevice(t *testing.T, db *sql.DB, ownerLogin, uploadToken string) storage.Device {
@@ -181,6 +207,49 @@ func TestMessageService_IngestWebhook_NoHMACSecretIgnoresSignatureHeader(t *test
 	body := []byte(`{"from":"+1234","text":"hi"}`)
 	if _, _, err := svc.IngestWebhook(ctx, "webhook-tok-6", body, "garbage-not-checked", IncomingMessage{From: "+1234", Text: "hi"}); err != nil {
 		t.Errorf("expected success when device has no hmac_secret regardless of signature header, got %v", err)
+	}
+}
+
+func TestMessageService_IngestWebhook_PublishesOnFreshInsert(t *testing.T) {
+	db := newTestDB(t)
+	pub := &fakePublisher{}
+	svc := NewMessageService(db, pub)
+	ctx := context.Background()
+	device := createTestDevice(t, db, "publish-owner1", "publish-tok-1")
+
+	msg, _, err := svc.IngestWebhook(ctx, "publish-tok-1", []byte(`{"from":"+1234","text":"hi"}`), "", IncomingMessage{From: "+1234", Text: "hi"})
+	if err != nil {
+		t.Fatalf("IngestWebhook: %v", err)
+	}
+
+	if pub.count() != 1 {
+		t.Fatalf("publisher.count() = %d, want 1", pub.count())
+	}
+	if pub.events[0].DeviceID != device.ID || pub.events[0].Msg.ID != msg.ID {
+		t.Errorf("published event = %+v, want DeviceID=%d Msg.ID=%d", pub.events[0], device.ID, msg.ID)
+	}
+}
+
+func TestMessageService_IngestWebhook_DoesNotPublishOnDuplicate(t *testing.T) {
+	db := newTestDB(t)
+	pub := &fakePublisher{}
+	svc := NewMessageService(db, pub)
+	ctx := context.Background()
+	createTestDevice(t, db, "publish-owner2", "publish-tok-2")
+
+	body := []byte(`{"from":"+1234","text":"hi"}`)
+	if _, _, err := svc.IngestWebhook(ctx, "publish-tok-2", body, "", IncomingMessage{From: "+1234", Text: "hi"}); err != nil {
+		t.Fatalf("IngestWebhook first: %v", err)
+	}
+	if pub.count() != 1 {
+		t.Fatalf("after first ingest, publisher.count() = %d, want 1", pub.count())
+	}
+
+	if _, dup, err := svc.IngestWebhook(ctx, "publish-tok-2", body, "", IncomingMessage{From: "+1234", Text: "hi"}); err != nil || !dup {
+		t.Fatalf("IngestWebhook retry: err=%v, duplicate=%v", err, dup)
+	}
+	if pub.count() != 1 {
+		t.Errorf("after duplicate retry, publisher.count() = %d, want still 1 (no re-publish)", pub.count())
 	}
 }
 
