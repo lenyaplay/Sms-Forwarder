@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS messages;
+DROP TABLE IF EXISTS viewer_bindings;
+DROP TABLE IF EXISTS devices;
+DROP TABLE IF EXISTS users;

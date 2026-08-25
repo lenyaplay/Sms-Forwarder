@@ -30,9 +30,26 @@
 - **Android Viewer App:** Kotlin.
 - **SMS Gateway:** стороннее приложение (см. выше), не часть этого репозитория.
 
+## Структура репозитория
+
+```
+backend/   — Go-бэкенд (см. ниже)
+android/   — Android Viewer App (Kotlin/Gradle, открывать в Android Studio)
+docs/      — архитектура и roadmap
+```
+
+## Быстрый старт (backend)
+
+```
+cd backend
+go run ./cmd/server
+```
+
+По умолчанию сервер слушает `:8080`, хранит SQLite-файл в `./data/sms_forwarder.db` и применяет миграции автоматически при старте. Настраивается через переменные окружения `PORT`, `DB_PATH`, `JWT_SECRET`. Проверка: `curl http://localhost:8080/healthz`.
+
 ## Статус
 
-Проект на стадии проектирования. См. [docs/Architecture.md](docs/Architecture.md) и [docs/Roadmap.md](docs/Roadmap.md).
+Milestone 0 (подготовка окружения) выполнен: каркас Go-бэкенда с миграциями и заготовка Android-проекта. Остальные этапы — см. [docs/Roadmap.md](docs/Roadmap.md). Архитектурные решения — в [docs/Architecture.md](docs/Architecture.md).
 
 ## Лицензии и сторонние зависимости
 

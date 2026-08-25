@@ -4,9 +4,9 @@
 
 ## Milestone 0 — Подготовка
 
-- [ ] Инициализация Go-модуля, структура проекта (`cmd/`, `internal/handlers`, `internal/services`, `internal/storage`)
-- [ ] Инициализация Android Viewer App проекта (Kotlin, минимальный шаблон)
-- [ ] Настройка SQLite и системы миграций (например, `golang-migrate` или `goose`)
+- [x] Инициализация Go-модуля, структура проекта (`cmd/`, `internal/handlers`, `internal/services`, `internal/storage`)
+- [x] Инициализация Android Viewer App проекта (Kotlin, минимальный шаблон)
+- [x] Настройка SQLite и системы миграций (собственный минимальный мигратор на `embed.FS`, без cgo-зависимостей)
 
 ## Milestone 1 — Авторизация пользователей
 
