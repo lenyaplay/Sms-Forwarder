@@ -22,7 +22,7 @@ func main() {
 		log.Fatalf("run migrations: %v", err)
 	}
 
-	router := handlers.NewRouter(db)
+	router := handlers.NewRouter(db, cfg)
 
 	addr := ":" + cfg.Port
 	log.Printf("listening on %s", addr)

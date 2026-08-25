@@ -49,7 +49,7 @@ go run ./cmd/server
 
 ## Статус
 
-Milestone 0 (подготовка окружения) выполнен: каркас Go-бэкенда с миграциями и заготовка Android-проекта. Остальные этапы — см. [docs/Roadmap.md](docs/Roadmap.md). Архитектурные решения — в [docs/Architecture.md](docs/Architecture.md).
+Milestone 0 (подготовка окружения) и Milestone 1 (авторизация пользователей: регистрация/логин, JWT access+refresh) выполнены. Остальные этапы — см. [docs/Roadmap.md](docs/Roadmap.md). Архитектурные решения — в [docs/Architecture.md](docs/Architecture.md), правила разработки и тестирования — в [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), спецификации фич — в [docs/specs/](docs/specs/).
 
 ## Лицензии и сторонние зависимости
 
