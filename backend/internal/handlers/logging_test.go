@@ -31,6 +31,8 @@ func newTestServerWithLogLevel(t *testing.T, level string) (*httptest.Server, *b
 		JWTSecret:       "test-secret",
 		AccessTokenTTL:  15 * time.Minute,
 		RefreshTokenTTL: 30 * 24 * time.Hour,
+		RateLimitRPS:    1000,
+		RateLimitBurst:  1000,
 	}
 
 	var buf bytes.Buffer

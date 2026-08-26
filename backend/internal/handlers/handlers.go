@@ -10,6 +10,7 @@ import (
 
 	"sms_forwarder/backend/internal/config"
 	"sms_forwarder/backend/internal/logging"
+	"sms_forwarder/backend/internal/ratelimit"
 	"sms_forwarder/backend/internal/realtime"
 	"sms_forwarder/backend/internal/services"
 )
@@ -31,10 +32,13 @@ func NewRouterWithLogger(db *sql.DB, cfg config.Config, logger *slog.Logger) htt
 
 	mux.HandleFunc("GET /healthz", healthCheck(db))
 
+	authLimiter := ratelimit.New(cfg.RateLimitRPS, cfg.RateLimitBurst)
+	rateLimitByIP := RateLimitByIP(authLimiter, cfg.TrustedProxyCIDRs)
+
 	authService := services.NewAuthService(db, cfg.JWTSecret, cfg.AccessTokenTTL, cfg.RefreshTokenTTL)
-	mux.HandleFunc("POST /auth/register", registerHandler(authService))
-	mux.HandleFunc("POST /auth/login", loginHandler(authService))
-	mux.HandleFunc("POST /auth/refresh", refreshHandler(authService))
+	mux.Handle("POST /auth/register", rateLimitByIP(registerHandler(authService)))
+	mux.Handle("POST /auth/login", rateLimitByIP(loginHandler(authService)))
+	mux.Handle("POST /auth/refresh", rateLimitByIP(refreshHandler(authService)))
 	mux.HandleFunc("POST /auth/logout", logoutHandler(authService))
 
 	deviceService := services.NewDeviceService(db)
@@ -52,7 +56,8 @@ func NewRouterWithLogger(db *sql.DB, cfg config.Config, logger *slog.Logger) htt
 
 	hub := realtime.NewHub()
 	messageService := services.NewMessageService(db, hub)
-	mux.Handle("POST /webhook", withBodyLogging(logger, webhookHandler(messageService)))
+	webhookLimiter := ratelimit.New(cfg.RateLimitRPS, cfg.RateLimitBurst)
+	mux.Handle("POST /webhook", RateLimitByUploadToken(webhookLimiter)(withBodyLogging(logger, webhookHandler(messageService))))
 	mux.Handle("GET /devices/{id}/messages", requireAuth(listMessagesHandler(messageService, deviceService)))
 	mux.Handle("GET /events", eventsHandler(deviceService, hub, cfg.JWTSecret, eventsHeartbeatInterval))
 
@@ -122,11 +127,12 @@ func (r *statusRecorder) Flush() {
 func healthCheck(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := db.PingContext(r.Context()); err != nil {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte("db unavailable"))
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"status": "unavailable",
+				"error":  err.Error(),
+			})
 			return
 		}
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	}
 }

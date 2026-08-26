@@ -60,9 +60,11 @@
 
 ## Milestone 7 — Безопасность и эксплуатация
 
-- [ ] Rate-limiting на webhook-эндпоинт
-- [ ] HTTPS/TLS в деплое, Docker-контейнеризация бэкенда
-- [ ] Логирование и health-check эндпоинт
+- [x] Rate-limiting на webhook-эндпоинт (и `/auth/*`)
+- [x] HTTPS/TLS в деплое (пример nginx-конфига), Docker-контейнеризация бэкенда
+- [x] Логирование и health-check эндпоинт
+
+См. [спецификацию 0008-security-and-ops](specs/0008-security-and-ops.md).
 
 ## Milestone 8 — Backlog (пост-MVP, не приоритизировано)
 

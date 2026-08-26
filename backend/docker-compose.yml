@@ -1,0 +1,26 @@
+services:
+  backend:
+    build: .
+    restart: unless-stopped
+    ports:
+      # Bound to loopback only - nginx on the host terminates TLS and
+      # proxies to this port, see deploy/nginx.example.conf. Never publish
+      # this on 0.0.0.0 - the container has no TLS of its own.
+      - "127.0.0.1:8080:8080"
+    environment:
+      PORT: "8080"
+      DB_PATH: "/data/sms_forwarder.db"
+      # Real secret must be supplied at deploy time (e.g. via an untracked
+      # .env file or the host's secret manager) - never commit a real value.
+      JWT_SECRET: "change-me-in-production"
+      LOG_LEVEL: "info"
+      RATE_LIMIT_RPS: "1"
+      RATE_LIMIT_BURST: "10"
+      # CIDR of the host's own nginx as seen from inside the container, so
+      # X-Forwarded-For is trusted only from the actual reverse proxy.
+      TRUSTED_PROXY_CIDRS: "172.16.0.0/12"
+    volumes:
+      - sms_forwarder_data:/data
+
+volumes:
+  sms_forwarder_data:

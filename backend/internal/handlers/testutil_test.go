@@ -26,6 +26,11 @@ func newTestServer(t *testing.T) *httptest.Server {
 		JWTSecret:       "test-secret",
 		AccessTokenTTL:  15 * time.Minute,
 		RefreshTokenTTL: 30 * 24 * time.Hour,
+		// High enough that existing tests' sequential requests never trip the
+		// rate limiter incidentally - rate-limiting itself is tested against
+		// its own low-limit server in ratelimit_middleware_test.go.
+		RateLimitRPS:   1000,
+		RateLimitBurst: 1000,
 	}
 
 	server := httptest.NewServer(NewRouter(db, cfg))

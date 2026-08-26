@@ -35,6 +35,8 @@ func newTestServerWithDB(t *testing.T) (*httptest.Server, *sql.DB) {
 		JWTSecret:       "test-secret",
 		AccessTokenTTL:  15 * time.Minute,
 		RefreshTokenTTL: 30 * 24 * time.Hour,
+		RateLimitRPS:    1000,
+		RateLimitBurst:  1000,
 	}
 
 	server := httptest.NewServer(NewRouter(db, cfg))
