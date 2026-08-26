@@ -13,12 +13,30 @@ sealed class LoginResult {
     data class Failure(val message: String) : LoginResult()
 }
 
+sealed class RegisterResult {
+    object Success : RegisterResult()
+    data class Failure(val message: String) : RegisterResult()
+}
+
 @Singleton
 class AuthRepository @Inject constructor(
     private val apiService: ApiService,
     private val tokenStore: TokenStore,
 ) {
     fun isLoggedIn(): Boolean = tokenStore.read() != null
+
+    suspend fun register(username: String, password: String): RegisterResult {
+        return try {
+            val response = apiService.register(LoginRequest(username, password))
+            if (response.isSuccessful) {
+                RegisterResult.Success
+            } else {
+                RegisterResult.Failure(registerErrorMessage(response.code()))
+            }
+        } catch (e: Exception) {
+            RegisterResult.Failure("Network error: ${e.message ?: "unknown"}")
+        }
+    }
 
     suspend fun login(username: String, password: String): LoginResult {
         return try {
@@ -50,5 +68,10 @@ class AuthRepository @Inject constructor(
     private fun errorMessage(code: Int): String = when (code) {
         401 -> "Invalid username or password"
         else -> "Login failed (HTTP $code)"
+    }
+
+    private fun registerErrorMessage(code: Int): String = when (code) {
+        409 -> "This login is already taken"
+        else -> "Registration failed (HTTP $code)"
     }
 }

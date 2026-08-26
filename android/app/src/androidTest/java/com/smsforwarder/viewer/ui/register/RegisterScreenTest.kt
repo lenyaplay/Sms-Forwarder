@@ -1,10 +1,11 @@
-package com.smsforwarder.viewer.ui.adddevice
+package com.smsforwarder.viewer.ui.register
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import com.smsforwarder.viewer.data.local.TokenStore
 import com.smsforwarder.viewer.data.remote.ApiService
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingRequest
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingResponse
@@ -22,21 +23,22 @@ import com.smsforwarder.viewer.data.remote.dto.ReissueUploadTokenRequest
 import com.smsforwarder.viewer.data.remote.dto.ReissueUploadTokenResponse
 import com.smsforwarder.viewer.data.remote.dto.RevokeDownloadTokenResponse
 import com.smsforwarder.viewer.data.remote.dto.TokenPairResponse
-import com.smsforwarder.viewer.data.repository.DeviceRepository
+import com.smsforwarder.viewer.data.repository.AuthRepository
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Rule
 import org.junit.Test
+import org.mockito.kotlin.mock
 import retrofit2.Response
 
-private class ScriptedApiService(private val bindingResult: Response<CreateBindingResponse>) : ApiService {
-    override suspend fun register(request: LoginRequest) = Response.success(Unit)
+private class ScriptedApiService(private val registerResult: Response<Unit>) : ApiService {
+    override suspend fun register(request: LoginRequest) = registerResult
     override suspend fun login(request: LoginRequest) = Response.success(TokenPairResponse("a", "r"))
     override suspend fun refresh(request: RefreshRequest) = Response.success(TokenPairResponse("a", "r"))
     override suspend fun logout(request: LogoutRequest) = Response.success(Unit)
     override suspend fun listDevices() = Response.success(DeviceListResponse(emptyList()))
     override suspend fun createDevice(request: CreateDeviceRequest) =
         Response.success(DeviceCreateResponse(1, "d", "tok", null, "2026-01-01T00:00:00Z"))
-    override suspend fun createBinding(request: CreateBindingRequest) = bindingResult
+    override suspend fun createBinding(request: CreateBindingRequest) = Response.success(CreateBindingResponse(1, "d"))
     override suspend fun createDownloadToken(deviceId: Long, request: CreateDownloadTokenRequest) =
         Response.success(DownloadTokenDto(1, "tok", null, null, null, "2026-01-01T00:00:00Z"))
     override suspend fun listDownloadTokens(deviceId: Long) = Response.success(DownloadTokenListResponse(emptyList()))
@@ -48,67 +50,72 @@ private class ScriptedApiService(private val bindingResult: Response<CreateBindi
         Response.success(MessageListResponse(emptyList(), null))
 }
 
-class AddDeviceScreenTest {
+class RegisterScreenTest {
 
     @get:Rule
     val composeRule = createComposeRule()
 
-    @Test
-    fun validTokenAddsDeviceAndNavigatesBack() {
-        var added = false
-        composeRule.setContent {
-            AddDeviceScreen(
-                onDeviceAdded = { added = true },
-                viewModel = AddDeviceViewModel(
-                    DeviceRepository(ScriptedApiService(Response.success(CreateBindingResponse(1, "Phone")))),
-                ),
-            )
-        }
-
-        composeRule.onNodeWithTag(AddDeviceTestTags.TOKEN_FIELD).performTextInput("valid-token")
-        composeRule.onNodeWithTag(AddDeviceTestTags.SUBMIT_BUTTON).performClick()
-
-        composeRule.waitUntil(timeoutMillis = 5_000) { added }
+    private fun viewModel(registerResult: Response<Unit>): RegisterViewModel {
+        val tokenStore: TokenStore = mock()
+        return RegisterViewModel(AuthRepository(ScriptedApiService(registerResult), tokenStore))
     }
 
     @Test
-    fun scannedQrTokenAddsDeviceTheSameWayAsManualEntry() {
-        // QrScannerView's onScanned callback and the manual-entry submit
-        // button both funnel into AddDeviceViewModel.submitToken(token) - see
-        // AddDeviceScreen.kt. Camera hardware/permission isn't available in
-        // this test environment, so this exercises that shared entry point
-        // directly with a "scanned" value, per spec 0007's acceptance
-        // criterion that QR and manual entry produce the same result.
-        var added = false
-        val viewModel = AddDeviceViewModel(
-            DeviceRepository(ScriptedApiService(Response.success(CreateBindingResponse(1, "Phone")))),
-        )
+    fun successfulRegistrationReturnsUsername() {
+        var registered: String? = null
         composeRule.setContent {
-            AddDeviceScreen(onDeviceAdded = { added = true }, viewModel = viewModel)
-        }
-
-        viewModel.submitToken("scanned-qr-token")
-
-        composeRule.waitUntil(timeoutMillis = 5_000) { added }
-    }
-
-    @Test
-    fun invalidTokenShowsError() {
-        composeRule.setContent {
-            AddDeviceScreen(
-                onDeviceAdded = {},
-                viewModel = AddDeviceViewModel(
-                    DeviceRepository(ScriptedApiService(Response.error(401, "{}".toResponseBody()))),
-                ),
+            RegisterScreen(
+                onRegistered = { registered = it },
+                onBackToLogin = {},
+                viewModel = viewModel(Response.success(Unit)),
             )
         }
 
-        composeRule.onNodeWithTag(AddDeviceTestTags.TOKEN_FIELD).performTextInput("bad-token")
-        composeRule.onNodeWithTag(AddDeviceTestTags.SUBMIT_BUTTON).performClick()
+        composeRule.onNodeWithTag(RegisterTestTags.USERNAME_FIELD).performTextInput("newuser")
+        composeRule.onNodeWithTag(RegisterTestTags.PASSWORD_FIELD).performTextInput("secretpw")
+        composeRule.onNodeWithTag(RegisterTestTags.CONFIRM_PASSWORD_FIELD).performTextInput("secretpw")
+        composeRule.onNodeWithTag(RegisterTestTags.SUBMIT_BUTTON).performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) { registered == "newuser" }
+    }
+
+    @Test
+    fun mismatchedPasswordsShowsErrorWithoutCallingServer() {
+        composeRule.setContent {
+            RegisterScreen(
+                onRegistered = {},
+                onBackToLogin = {},
+                viewModel = viewModel(Response.success(Unit)),
+            )
+        }
+
+        composeRule.onNodeWithTag(RegisterTestTags.USERNAME_FIELD).performTextInput("newuser")
+        composeRule.onNodeWithTag(RegisterTestTags.PASSWORD_FIELD).performTextInput("secretpw")
+        composeRule.onNodeWithTag(RegisterTestTags.CONFIRM_PASSWORD_FIELD).performTextInput("different")
+        composeRule.onNodeWithTag(RegisterTestTags.SUBMIT_BUTTON).performClick()
 
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag(AddDeviceTestTags.ERROR_TEXT).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag(RegisterTestTags.ERROR_TEXT).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithTag(AddDeviceTestTags.ERROR_TEXT).assertExists()
+    }
+
+    @Test
+    fun takenLoginShowsError() {
+        composeRule.setContent {
+            RegisterScreen(
+                onRegistered = {},
+                onBackToLogin = {},
+                viewModel = viewModel(Response.error(409, "{}".toResponseBody())),
+            )
+        }
+
+        composeRule.onNodeWithTag(RegisterTestTags.USERNAME_FIELD).performTextInput("existing")
+        composeRule.onNodeWithTag(RegisterTestTags.PASSWORD_FIELD).performTextInput("secretpw")
+        composeRule.onNodeWithTag(RegisterTestTags.CONFIRM_PASSWORD_FIELD).performTextInput("secretpw")
+        composeRule.onNodeWithTag(RegisterTestTags.SUBMIT_BUTTON).performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(RegisterTestTags.ERROR_TEXT).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 }

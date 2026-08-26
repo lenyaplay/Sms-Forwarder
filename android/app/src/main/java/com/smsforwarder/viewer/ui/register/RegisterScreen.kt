@@ -1,10 +1,9 @@
-package com.smsforwarder.viewer.ui.login
+package com.smsforwarder.viewer.ui.register
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -18,64 +17,46 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
-object LoginTestTags {
-    const val USERNAME_FIELD = "login_username_field"
-    const val PASSWORD_FIELD = "login_password_field"
-    const val SUBMIT_BUTTON = "login_submit_button"
-    const val ERROR_TEXT = "login_error_text"
-    const val CREATE_ACCOUNT_LINK = "login_create_account_link"
+object RegisterTestTags {
+    const val USERNAME_FIELD = "register_username_field"
+    const val PASSWORD_FIELD = "register_password_field"
+    const val CONFIRM_PASSWORD_FIELD = "register_confirm_password_field"
+    const val SUBMIT_BUTTON = "register_submit_button"
+    const val ERROR_TEXT = "register_error_text"
+    const val BACK_TO_LOGIN_LINK = "register_back_to_login_link"
 }
 
 @Composable
-fun LoginScreen(
-    onLoggedIn: () -> Unit,
-    onCreateAccount: () -> Unit = {},
-    initialUsername: String = "",
-    viewModel: LoginViewModel = hiltViewModel(),
+fun RegisterScreen(
+    onRegistered: (username: String) -> Unit,
+    onBackToLogin: () -> Unit,
+    viewModel: RegisterViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    LaunchedEffect(uiState.loggedIn) {
-        if (uiState.loggedIn) onLoggedIn()
-    }
-
-    LaunchedEffect(initialUsername) {
-        if (initialUsername.isNotBlank()) viewModel.onUsernameChange(initialUsername)
+    LaunchedEffect(uiState.registeredUsername) {
+        uiState.registeredUsername?.let(onRegistered)
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
+        modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(text = "SMS Forwarder Viewer", style = MaterialTheme.typography.headlineSmall)
+        Text(text = "Create account", style = MaterialTheme.typography.headlineSmall)
 
         OutlinedTextField(
             value = uiState.username,
             onValueChange = viewModel::onUsernameChange,
             label = { Text("Username") },
             singleLine = true,
-            // No capitalization/autocorrect - the IME otherwise mangles a
-            // typed login (autocapitalizing the first letter, or swapping
-            // it for a dictionary suggestion), which surfaces as a
-            // confusing "invalid login or password" instead of a keyboard
-            // problem.
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.None,
-                autoCorrectEnabled = false,
-                keyboardType = KeyboardType.Text,
-            ),
             modifier = Modifier
                 .padding(top = 24.dp)
-                .testTag(LoginTestTags.USERNAME_FIELD),
+                .testTag(RegisterTestTags.USERNAME_FIELD),
         )
 
         OutlinedTextField(
@@ -84,10 +65,20 @@ fun LoginScreen(
             label = { Text("Password") },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier
                 .padding(top = 8.dp)
-                .testTag(LoginTestTags.PASSWORD_FIELD),
+                .testTag(RegisterTestTags.PASSWORD_FIELD),
+        )
+
+        OutlinedTextField(
+            value = uiState.confirmPassword,
+            onValueChange = viewModel::onConfirmPasswordChange,
+            label = { Text("Confirm password") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .testTag(RegisterTestTags.CONFIRM_PASSWORD_FIELD),
         )
 
         if (uiState.errorMessage != null) {
@@ -96,30 +87,30 @@ fun LoginScreen(
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier
                     .padding(top = 8.dp)
-                    .testTag(LoginTestTags.ERROR_TEXT),
+                    .testTag(RegisterTestTags.ERROR_TEXT),
             )
         }
 
         Button(
-            onClick = viewModel::login,
+            onClick = viewModel::register,
             enabled = !uiState.isLoading,
             modifier = Modifier
                 .padding(top = 16.dp)
-                .testTag(LoginTestTags.SUBMIT_BUTTON),
+                .testTag(RegisterTestTags.SUBMIT_BUTTON),
         ) {
             if (uiState.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
             }
-            Text("Log in")
+            Text("Register")
         }
 
         TextButton(
-            onClick = onCreateAccount,
+            onClick = onBackToLogin,
             modifier = Modifier
                 .padding(top = 8.dp)
-                .testTag(LoginTestTags.CREATE_ACCOUNT_LINK),
+                .testTag(RegisterTestTags.BACK_TO_LOGIN_LINK),
         ) {
-            Text("Create account")
+            Text("Already have an account? Log in")
         }
     }
 }

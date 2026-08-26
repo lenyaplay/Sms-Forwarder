@@ -1,10 +1,12 @@
-package com.smsforwarder.viewer.ui.adddevice
+package com.smsforwarder.viewer.ui.settings
 
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTextInput
+import com.smsforwarder.viewer.data.local.ServerConfigStore
+import com.smsforwarder.viewer.data.local.TokenStore
+import com.smsforwarder.viewer.data.local.Tokens
 import com.smsforwarder.viewer.data.remote.ApiService
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingRequest
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingResponse
@@ -22,13 +24,14 @@ import com.smsforwarder.viewer.data.remote.dto.ReissueUploadTokenRequest
 import com.smsforwarder.viewer.data.remote.dto.ReissueUploadTokenResponse
 import com.smsforwarder.viewer.data.remote.dto.RevokeDownloadTokenResponse
 import com.smsforwarder.viewer.data.remote.dto.TokenPairResponse
-import com.smsforwarder.viewer.data.repository.DeviceRepository
-import okhttp3.ResponseBody.Companion.toResponseBody
+import com.smsforwarder.viewer.data.repository.AuthRepository
 import org.junit.Rule
 import org.junit.Test
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import retrofit2.Response
 
-private class ScriptedApiService(private val bindingResult: Response<CreateBindingResponse>) : ApiService {
+private class NoOpApiService : ApiService {
     override suspend fun register(request: LoginRequest) = Response.success(Unit)
     override suspend fun login(request: LoginRequest) = Response.success(TokenPairResponse("a", "r"))
     override suspend fun refresh(request: RefreshRequest) = Response.success(TokenPairResponse("a", "r"))
@@ -36,7 +39,7 @@ private class ScriptedApiService(private val bindingResult: Response<CreateBindi
     override suspend fun listDevices() = Response.success(DeviceListResponse(emptyList()))
     override suspend fun createDevice(request: CreateDeviceRequest) =
         Response.success(DeviceCreateResponse(1, "d", "tok", null, "2026-01-01T00:00:00Z"))
-    override suspend fun createBinding(request: CreateBindingRequest) = bindingResult
+    override suspend fun createBinding(request: CreateBindingRequest) = Response.success(CreateBindingResponse(1, "d"))
     override suspend fun createDownloadToken(deviceId: Long, request: CreateDownloadTokenRequest) =
         Response.success(DownloadTokenDto(1, "tok", null, null, null, "2026-01-01T00:00:00Z"))
     override suspend fun listDownloadTokens(deviceId: Long) = Response.success(DownloadTokenListResponse(emptyList()))
@@ -48,67 +51,57 @@ private class ScriptedApiService(private val bindingResult: Response<CreateBindi
         Response.success(MessageListResponse(emptyList(), null))
 }
 
-class AddDeviceScreenTest {
+class SettingsScreenTest {
 
     @get:Rule
     val composeRule = createComposeRule()
 
-    @Test
-    fun validTokenAddsDeviceAndNavigatesBack() {
-        var added = false
-        composeRule.setContent {
-            AddDeviceScreen(
-                onDeviceAdded = { added = true },
-                viewModel = AddDeviceViewModel(
-                    DeviceRepository(ScriptedApiService(Response.success(CreateBindingResponse(1, "Phone")))),
-                ),
-            )
-        }
-
-        composeRule.onNodeWithTag(AddDeviceTestTags.TOKEN_FIELD).performTextInput("valid-token")
-        composeRule.onNodeWithTag(AddDeviceTestTags.SUBMIT_BUTTON).performClick()
-
-        composeRule.waitUntil(timeoutMillis = 5_000) { added }
+    private fun viewModel(serverUrl: String): SettingsViewModel {
+        val tokenStore: TokenStore = mock()
+        whenever(tokenStore.read()).thenReturn(Tokens("a", "r"))
+        val serverConfigStore: ServerConfigStore = mock()
+        whenever(serverConfigStore.getUrl()).thenReturn(serverUrl)
+        return SettingsViewModel(AuthRepository(NoOpApiService(), tokenStore), serverConfigStore)
     }
 
     @Test
-    fun scannedQrTokenAddsDeviceTheSameWayAsManualEntry() {
-        // QrScannerView's onScanned callback and the manual-entry submit
-        // button both funnel into AddDeviceViewModel.submitToken(token) - see
-        // AddDeviceScreen.kt. Camera hardware/permission isn't available in
-        // this test environment, so this exercises that shared entry point
-        // directly with a "scanned" value, per spec 0007's acceptance
-        // criterion that QR and manual entry produce the same result.
-        var added = false
-        val viewModel = AddDeviceViewModel(
-            DeviceRepository(ScriptedApiService(Response.success(CreateBindingResponse(1, "Phone")))),
-        )
+    fun displaysCurrentServerUrl() {
         composeRule.setContent {
-            AddDeviceScreen(onDeviceAdded = { added = true }, viewModel = viewModel)
+            SettingsScreen(onLoggedOut = {}, onServerChangeRequested = {}, viewModel = viewModel("https://example.com"))
         }
 
-        viewModel.submitToken("scanned-qr-token")
-
-        composeRule.waitUntil(timeoutMillis = 5_000) { added }
+        composeRule.onNodeWithText("https://example.com").assertExists()
     }
 
     @Test
-    fun invalidTokenShowsError() {
+    fun logoutButtonNavigatesToLoggedOut() {
+        var loggedOut = false
         composeRule.setContent {
-            AddDeviceScreen(
-                onDeviceAdded = {},
-                viewModel = AddDeviceViewModel(
-                    DeviceRepository(ScriptedApiService(Response.error(401, "{}".toResponseBody()))),
-                ),
+            SettingsScreen(
+                onLoggedOut = { loggedOut = true },
+                onServerChangeRequested = {},
+                viewModel = viewModel("https://example.com"),
             )
         }
 
-        composeRule.onNodeWithTag(AddDeviceTestTags.TOKEN_FIELD).performTextInput("bad-token")
-        composeRule.onNodeWithTag(AddDeviceTestTags.SUBMIT_BUTTON).performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.LOGOUT_BUTTON).performClick()
 
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag(AddDeviceTestTags.ERROR_TEXT).fetchSemanticsNodes().isNotEmpty()
+        composeRule.waitUntil(timeoutMillis = 5_000) { loggedOut }
+    }
+
+    @Test
+    fun changeServerButtonLogsOutAndRequestsServerChange() {
+        var serverChangeRequested = false
+        composeRule.setContent {
+            SettingsScreen(
+                onLoggedOut = {},
+                onServerChangeRequested = { serverChangeRequested = true },
+                viewModel = viewModel("https://example.com"),
+            )
         }
-        composeRule.onNodeWithTag(AddDeviceTestTags.ERROR_TEXT).assertExists()
+
+        composeRule.onNodeWithTag(SettingsTestTags.CHANGE_SERVER_BUTTON).performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) { serverChangeRequested }
     }
 }

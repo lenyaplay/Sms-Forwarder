@@ -3,6 +3,7 @@ package com.smsforwarder.viewer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import com.smsforwarder.viewer.data.local.ServerConfigStore
 import com.smsforwarder.viewer.data.local.SessionEvents
 import com.smsforwarder.viewer.data.repository.AuthRepository
 import com.smsforwarder.viewer.ui.nav.NavGraph
@@ -17,11 +18,17 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var sessionEvents: SessionEvents
 
+    @Inject lateinit var serverConfigStore: ServerConfigStore
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             SmsForwarderViewerTheme {
-                NavGraph(authRepository = authRepository, sessionEvents = sessionEvents)
+                NavGraph(
+                    authRepository = authRepository,
+                    sessionEvents = sessionEvents,
+                    serverConfigStore = serverConfigStore,
+                )
             }
         }
     }

@@ -1,6 +1,7 @@
 package com.smsforwarder.viewer.di
 
 import android.content.Context
+import com.smsforwarder.viewer.data.local.ServerConfigStore
 import com.smsforwarder.viewer.data.local.SessionEvents
 import com.smsforwarder.viewer.data.local.TokenStore
 import com.smsforwarder.viewer.data.remote.ApiService
@@ -23,16 +24,27 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    // Overridable in tests (e.g. pointed at a MockWebServer instance).
-    // 10.0.2.2 is the emulator's alias for the host machine's 127.0.0.1 - a
-    // physical device instead needs `adb reverse tcp:8080 tcp:8080` (or a
-    // real configurable server URL - see Milestone 9 backlog).
-    private const val DEFAULT_BASE_URL = "http://10.0.2.2:8080/"
+    // 10.0.2.2 is the emulator's alias for the host machine's 127.0.0.1 - used
+    // only as a last-resort fallback before the user has configured a real
+    // server URL (spec 0010's "Server setup" screen). A physical device needs
+    // `adb reverse tcp:8080 tcp:8080` if pointed at a local backend.
+    private const val FALLBACK_BASE_URL = "http://10.0.2.2:8080/"
 
     @Provides
     @Singleton
+    fun provideServerConfigStore(@ApplicationContext context: Context): ServerConfigStore = ServerConfigStore(context)
+
+    // Retrofit.Builder().baseUrl() only validates URL *format*, it never
+    // connects - so it's safe to hand it a fallback here even when the user
+    // hasn't configured a real server yet. Routing to the mandatory "Server
+    // setup" screen is driven separately by ServerConfigStore.hasUrl() in
+    // NavGraph, not by this provider - if this threw or returned null instead,
+    // the whole Hilt graph (built eagerly at Activity start) would crash
+    // before the user ever saw that screen.
+    @Provides
+    @Singleton
     @Named("baseUrl")
-    fun provideBaseUrl(): String = DEFAULT_BASE_URL
+    fun provideBaseUrl(serverConfigStore: ServerConfigStore): String = serverConfigStore.getUrl() ?: FALLBACK_BASE_URL
 
     @Provides
     @Singleton

@@ -5,11 +5,19 @@ import com.smsforwarder.viewer.data.local.Tokens
 import com.smsforwarder.viewer.data.remote.ApiService
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingRequest
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingResponse
+import com.smsforwarder.viewer.data.remote.dto.CreateDeviceRequest
+import com.smsforwarder.viewer.data.remote.dto.CreateDownloadTokenRequest
+import com.smsforwarder.viewer.data.remote.dto.DeviceCreateResponse
 import com.smsforwarder.viewer.data.remote.dto.DeviceListResponse
+import com.smsforwarder.viewer.data.remote.dto.DownloadTokenDto
+import com.smsforwarder.viewer.data.remote.dto.DownloadTokenListResponse
 import com.smsforwarder.viewer.data.remote.dto.LoginRequest
 import com.smsforwarder.viewer.data.remote.dto.LogoutRequest
 import com.smsforwarder.viewer.data.remote.dto.MessageListResponse
 import com.smsforwarder.viewer.data.remote.dto.RefreshRequest
+import com.smsforwarder.viewer.data.remote.dto.ReissueUploadTokenRequest
+import com.smsforwarder.viewer.data.remote.dto.ReissueUploadTokenResponse
+import com.smsforwarder.viewer.data.remote.dto.RevokeDownloadTokenResponse
 import com.smsforwarder.viewer.data.remote.dto.TokenPairResponse
 import kotlinx.coroutines.runBlocking
 import okhttp3.ResponseBody.Companion.toResponseBody
@@ -24,9 +32,13 @@ import retrofit2.Response
 
 private class FakeApiService(
     private val loginResponse: Response<TokenPairResponse>? = null,
+    private val registerResponse: Response<Unit>? = null,
 ) : ApiService {
     var logoutCalled = false
     var logoutRequest: LogoutRequest? = null
+
+    override suspend fun register(request: LoginRequest): Response<Unit> =
+        registerResponse ?: Response.success(Unit)
 
     override suspend fun login(request: LoginRequest): Response<TokenPairResponse> =
         loginResponse ?: Response.success(TokenPairResponse("access", "refresh"))
@@ -43,8 +55,22 @@ private class FakeApiService(
     override suspend fun listDevices(): Response<DeviceListResponse> =
         Response.success(DeviceListResponse(emptyList()))
 
+    override suspend fun createDevice(request: CreateDeviceRequest) =
+        Response.success(DeviceCreateResponse(1, "d", "tok", null, "2026-01-01T00:00:00Z"))
+
     override suspend fun createBinding(request: CreateBindingRequest): Response<CreateBindingResponse> =
         Response.success(CreateBindingResponse(1, "Device"))
+
+    override suspend fun createDownloadToken(deviceId: Long, request: CreateDownloadTokenRequest) =
+        Response.success(DownloadTokenDto(1, "tok", null, null, null, "2026-01-01T00:00:00Z"))
+
+    override suspend fun listDownloadTokens(deviceId: Long) = Response.success(DownloadTokenListResponse(emptyList()))
+
+    override suspend fun revokeDownloadToken(deviceId: Long, tokenId: Long) =
+        Response.success(RevokeDownloadTokenResponse(0))
+
+    override suspend fun reissueUploadToken(deviceId: Long, request: ReissueUploadTokenRequest) =
+        Response.success(ReissueUploadTokenResponse("tok", null))
 
     override suspend fun listMessages(
         deviceId: Long,
@@ -62,6 +88,26 @@ class AuthRepositoryTest {
     @Before
     fun setUp() {
         tokenStore = mock()
+    }
+
+    @Test
+    fun `successful register returns success`() = runBlocking {
+        val api = FakeApiService(registerResponse = Response.success(Unit))
+        val repo = AuthRepository(api, tokenStore)
+
+        val result = repo.register("newuser", "pass")
+
+        assertTrue(result is RegisterResult.Success)
+    }
+
+    @Test
+    fun `register with taken login (409) returns failure`() = runBlocking {
+        val api = FakeApiService(registerResponse = Response.error(409, "{}".toResponseBody()))
+        val repo = AuthRepository(api, tokenStore)
+
+        val result = repo.register("existing", "pass") as RegisterResult.Failure
+
+        assertTrue(result.message.contains("taken", ignoreCase = true))
     }
 
     @Test

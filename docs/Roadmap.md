@@ -67,6 +67,15 @@
 
 См. [спецификацию 0008-security-and-ops](specs/0008-security-and-ops.md).
 
+## Milestone 9 — Многопользовательский онбординг и самообслуживание (Android)
+
+- [x] Экран регистрации (открытая, без инвайт-кода)
+- [x] Настраиваемый server URL (экран настройки сервера + экран настроек)
+- [x] Генерация QR-приглашения (`download_token`) владельцем устройства
+- [x] Базовый экран управления токенами устройства (список/отзыв `download_token`, перевыпуск `upload_token`)
+
+См. [спецификацию 0010-android-onboarding-self-service](specs/0010-android-onboarding-self-service.md).
+
 ## Milestone 8 — Backlog (пост-MVP, не приоритизировано)
 
 - [ ] Push-уведомления (FCM) в Viewer App
