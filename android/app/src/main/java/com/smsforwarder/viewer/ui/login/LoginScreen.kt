@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -54,6 +55,16 @@ fun LoginScreen(
             onValueChange = viewModel::onUsernameChange,
             label = { Text("Username") },
             singleLine = true,
+            // No capitalization/autocorrect - the IME otherwise mangles a
+            // typed login (autocapitalizing the first letter, or swapping
+            // it for a dictionary suggestion), which surfaces as a
+            // confusing "invalid login or password" instead of a keyboard
+            // problem.
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None,
+                autoCorrectEnabled = false,
+                keyboardType = KeyboardType.Text,
+            ),
             modifier = Modifier
                 .padding(top = 24.dp)
                 .testTag(LoginTestTags.USERNAME_FIELD),
