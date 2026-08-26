@@ -53,6 +53,7 @@
 
 - **Backend (Go):** стандартный пакет `testing`, файлы `*_test.go` рядом с тестируемым кодом. Для HTTP-хендлеров — `net/http/httptest`. Для кода, работающего с БД, — реальная SQLite (временный файл или `:memory:`) с применёнными миграциями, не моки.
 - **Android (Kotlin):** unit-тесты (JUnit) для логики, инструментальные тесты — где нужна проверка на реальном Android-окружении. Вводятся с момента, когда стартует разработка функциональности приложения (см. `docs/Roadmap.md`, Milestone 6+).
+- **Android против реального бэкенда:** пакет `com.smsforwarder.viewer.realbackend` (`android/app/src/androidTest/...`) — инструментированные тесты через реальный Retrofit/OkHttp против живого бэкенда (`docker compose up` + `adb reverse tcp:8080 tcp:8080`), не подменяющие `ApiService` фейком. Исключены из обычного `connectedAndroidTest` через `notPackage` в `app/build.gradle.kts`; запуск — `adb shell am instrument -w -e package com.smsforwarder.viewer.realbackend com.smsforwarder.viewer.test/com.smsforwarder.viewer.HiltTestRunner`. Полное обоснование и список сценариев — `docs/specs/0009-real-backend-integration-tests.md`.
 
 ## Скилы для Android-разработки
 

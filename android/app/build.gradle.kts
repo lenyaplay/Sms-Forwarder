@@ -19,6 +19,11 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "com.smsforwarder.viewer.HiltTestRunner"
+        // Excludes real-backend instrumented tests (require a live docker-compose
+        // backend + adb reverse, see docs/specs/0009-real-backend-integration-tests.md)
+        // from the default connectedAndroidTest run. Run them explicitly via
+        // `adb shell am instrument -e package com.smsforwarder.viewer.realbackend ...`.
+        testInstrumentationRunnerArguments["notPackage"] = "com.smsforwarder.viewer.realbackend"
     }
 
     buildTypes {
