@@ -1,5 +1,6 @@
 package com.smsforwarder.viewer.data.remote
 
+import com.smsforwarder.viewer.data.local.ServerConfigStore
 import com.smsforwarder.viewer.data.local.SessionEvents
 import com.smsforwarder.viewer.data.local.TokenStore
 import com.smsforwarder.viewer.data.local.Tokens
@@ -20,17 +21,22 @@ import okhttp3.OkHttpClient
  * recursively invoking this same Authenticator.
  */
 class AuthAuthenticator(
-    private val baseUrl: String,
+    private val serverConfigStore: ServerConfigStore,
     private val tokenStore: TokenStore,
     private val sessionEvents: SessionEvents,
 ) : Authenticator {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    // A dummy syntactically-valid baseUrl - the real host is rewritten per
+    // request by DynamicBaseUrlInterceptor, reading serverConfigStore fresh
+    // each call, not whatever URL was configured when this lazy was first
+    // touched (spec 0011 - the same "baked at construction time" bug this
+    // whole interceptor exists to avoid).
     private val plainApi: ApiService by lazy {
         Retrofit.Builder()
-            .baseUrl(baseUrl)
-            .client(OkHttpClient.Builder().build())
+            .baseUrl("http://localhost/")
+            .client(OkHttpClient.Builder().addInterceptor(DynamicBaseUrlInterceptor(serverConfigStore)).build())
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(ApiService::class.java)

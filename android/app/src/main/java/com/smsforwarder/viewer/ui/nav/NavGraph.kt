@@ -12,6 +12,7 @@ import com.smsforwarder.viewer.data.local.ServerConfigStore
 import com.smsforwarder.viewer.data.local.SessionEvents
 import com.smsforwarder.viewer.data.repository.AuthRepository
 import com.smsforwarder.viewer.ui.adddevice.AddDeviceScreen
+import com.smsforwarder.viewer.ui.createdevice.CreateDeviceScreen
 import com.smsforwarder.viewer.ui.devicedetail.DeviceDetailScreen
 import com.smsforwarder.viewer.ui.devices.DeviceListScreen
 import com.smsforwarder.viewer.ui.feed.MessageFeedScreen
@@ -29,6 +30,7 @@ private object Routes {
     const val REGISTER = "register"
     const val DEVICES = "devices"
     const val ADD_DEVICE = "add_device"
+    const val CREATE_DEVICE = "create_device"
     const val FEED = "feed/{deviceId}/{deviceName}"
     const val DEVICE_DETAIL = "device_detail/{deviceId}/{deviceName}"
     const val SETTINGS = "settings"
@@ -110,10 +112,14 @@ fun NavGraph(
                 onManageDevice = { deviceId, deviceName ->
                     navController.navigate(Routes.deviceDetail(deviceId, deviceName))
                 },
+                onCreateDevice = { navController.navigate(Routes.CREATE_DEVICE) },
             )
         }
         composable(Routes.ADD_DEVICE) {
             AddDeviceScreen(onDeviceAdded = { navController.popBackStack() })
+        }
+        composable(Routes.CREATE_DEVICE) {
+            CreateDeviceScreen(onDone = { navController.popBackStack() })
         }
         composable(
             route = Routes.FEED,

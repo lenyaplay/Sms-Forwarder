@@ -2,6 +2,8 @@ package com.smsforwarder.viewer.ui.adddevice
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -39,8 +41,14 @@ fun AddDeviceScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     var showScanner by remember { mutableStateOf(false) }
-    val hasCameraPermission = remember {
-        ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        hasCameraPermission = granted
+        if (granted) showScanner = true
     }
 
     LaunchedEffect(uiState.addedDeviceName) {
@@ -80,27 +88,29 @@ fun AddDeviceScreen(
             Text("Add device")
         }
 
-        if (hasCameraPermission) {
-            TextButton(
-                onClick = { showScanner = !showScanner },
-                modifier = Modifier
-                    .padding(top = 8.dp)
-                    .testTag(AddDeviceTestTags.SCAN_TOGGLE),
-            ) {
-                Text(if (showScanner) "Hide QR scanner" else "Scan QR code instead")
-            }
+        TextButton(
+            onClick = {
+                when {
+                    !hasCameraPermission -> permissionLauncher.launch(Manifest.permission.CAMERA)
+                    else -> showScanner = !showScanner
+                }
+            },
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .testTag(AddDeviceTestTags.SCAN_TOGGLE),
+        ) {
+            Text(if (hasCameraPermission && showScanner) "Hide QR scanner" else "Scan QR code instead")
+        }
 
-            if (showScanner) {
-                QrScannerView(
-                    onScanned = { scanned ->
-                        showScanner = false
-                        viewModel.submitToken(scanned)
-                    },
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-            }
-        } else {
-            Text(
+        when {
+            hasCameraPermission && showScanner -> QrScannerView(
+                onScanned = { scanned ->
+                    showScanner = false
+                    viewModel.submitToken(scanned)
+                },
+                modifier = Modifier.padding(top = 16.dp),
+            )
+            !hasCameraPermission -> Text(
                 text = "Grant camera permission to scan a QR code, or enter the token manually.",
                 modifier = Modifier.padding(top = 8.dp),
             )

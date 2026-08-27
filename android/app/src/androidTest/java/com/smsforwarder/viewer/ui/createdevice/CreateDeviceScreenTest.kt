@@ -1,16 +1,16 @@
-package com.smsforwarder.viewer.ui.devices
+package com.smsforwarder.viewer.ui.createdevice
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import com.smsforwarder.viewer.data.remote.ApiService
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingRequest
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingResponse
 import com.smsforwarder.viewer.data.remote.dto.CreateDeviceRequest
 import com.smsforwarder.viewer.data.remote.dto.CreateDownloadTokenRequest
 import com.smsforwarder.viewer.data.remote.dto.DeviceCreateResponse
-import com.smsforwarder.viewer.data.remote.dto.DeviceDto
 import com.smsforwarder.viewer.data.remote.dto.DeviceListResponse
 import com.smsforwarder.viewer.data.remote.dto.DownloadTokenDto
 import com.smsforwarder.viewer.data.remote.dto.DownloadTokenListResponse
@@ -23,18 +23,18 @@ import com.smsforwarder.viewer.data.remote.dto.ReissueUploadTokenResponse
 import com.smsforwarder.viewer.data.remote.dto.RevokeDownloadTokenResponse
 import com.smsforwarder.viewer.data.remote.dto.TokenPairResponse
 import com.smsforwarder.viewer.data.repository.DeviceRepository
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Rule
 import org.junit.Test
 import retrofit2.Response
 
-private class ScriptedApiService(private val devices: List<DeviceDto>) : ApiService {
+private class ScriptedApiService(private val createDeviceResult: Response<DeviceCreateResponse>) : ApiService {
     override suspend fun register(request: LoginRequest) = Response.success(Unit)
     override suspend fun login(request: LoginRequest) = Response.success(TokenPairResponse("a", "r"))
     override suspend fun refresh(request: RefreshRequest) = Response.success(TokenPairResponse("a", "r"))
     override suspend fun logout(request: LogoutRequest) = Response.success(Unit)
-    override suspend fun listDevices() = Response.success(DeviceListResponse(devices))
-    override suspend fun createDevice(request: CreateDeviceRequest) =
-        Response.success(DeviceCreateResponse(1, "d", "tok", null, "2026-01-01T00:00:00Z"))
+    override suspend fun listDevices() = Response.success(DeviceListResponse(emptyList()))
+    override suspend fun createDevice(request: CreateDeviceRequest) = createDeviceResult
     override suspend fun createBinding(request: CreateBindingRequest) = Response.success(CreateBindingResponse(1, "d"))
     override suspend fun createDownloadToken(deviceId: Long, request: CreateDownloadTokenRequest) =
         Response.success(DownloadTokenDto(1, "tok", null, null, null, "2026-01-01T00:00:00Z"))
@@ -47,84 +47,58 @@ private class ScriptedApiService(private val devices: List<DeviceDto>) : ApiServ
         Response.success(MessageListResponse(emptyList(), null))
 }
 
-class DeviceListScreenTest {
+class CreateDeviceScreenTest {
 
     @get:Rule
     val composeRule = createComposeRule()
 
+    private fun viewModel(result: Response<DeviceCreateResponse>) =
+        CreateDeviceViewModel(DeviceRepository(ScriptedApiService(result)))
+
     @Test
-    fun emptyStateShownWhenNoDevices() {
+    fun successfulCreationShowsUploadTokenAndDone() {
+        val response = Response.success(DeviceCreateResponse(9, "Kitchen phone", "up-tok-123", null, "2026-01-01T00:00:00Z"))
         composeRule.setContent {
-            DeviceListScreen(
-                onAddDevice = {},
-                onOpenDevice = { _, _ -> },
-                viewModel = DeviceListViewModel(DeviceRepository(ScriptedApiService(emptyList()))),
-            )
+            CreateDeviceScreen(onDone = {}, viewModel = viewModel(response))
         }
 
+        composeRule.onNodeWithTag(CreateDeviceTestTags.NAME_FIELD).performTextInput("Kitchen phone")
+        composeRule.onNodeWithTag(CreateDeviceTestTags.CREATE_BUTTON).performClick()
+
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag(DeviceListTestTags.EMPTY_STATE).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag(CreateDeviceTestTags.UPLOAD_TOKEN_TEXT).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag(CreateDeviceTestTags.UPLOAD_TOKEN_TEXT).assertExists()
+        composeRule.onNodeWithTag(CreateDeviceTestTags.DONE_BUTTON).assertExists()
+    }
+
+    @Test
+    fun failedCreationShowsError() {
+        composeRule.setContent {
+            CreateDeviceScreen(onDone = {}, viewModel = viewModel(Response.error(500, "{}".toResponseBody())))
+        }
+
+        composeRule.onNodeWithTag(CreateDeviceTestTags.NAME_FIELD).performTextInput("Kitchen phone")
+        composeRule.onNodeWithTag(CreateDeviceTestTags.CREATE_BUTTON).performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(CreateDeviceTestTags.ERROR_TEXT).fetchSemanticsNodes().isNotEmpty()
         }
     }
 
     @Test
-    fun devicesAreListedAndClickable() {
-        var openedDeviceId: Long? = null
-        val devices = listOf(DeviceDto(1, "Phone", "owner", null, null, "2026-01-01T00:00:00Z"))
+    fun blankNameShowsErrorWithoutCallingServer() {
         composeRule.setContent {
-            DeviceListScreen(
-                onAddDevice = {},
-                onOpenDevice = { id, _ -> openedDeviceId = id },
-                viewModel = DeviceListViewModel(DeviceRepository(ScriptedApiService(devices))),
+            CreateDeviceScreen(
+                onDone = {},
+                viewModel = viewModel(Response.success(DeviceCreateResponse(1, "d", "tok", null, "2026-01-01T00:00:00Z"))),
             )
         }
 
+        composeRule.onNodeWithTag(CreateDeviceTestTags.CREATE_BUTTON).performClick()
+
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag(DeviceListTestTags.deviceItem(1)).fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithTag(CreateDeviceTestTags.ERROR_TEXT).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithTag(DeviceListTestTags.deviceItem(1)).performClick()
-
-        composeRule.waitUntil(timeoutMillis = 5_000) { openedDeviceId == 1L }
-    }
-
-    @Test
-    fun addButtonOpensMenuAndJoinByTokenTriggersCallback() {
-        var addClicked = false
-        composeRule.setContent {
-            DeviceListScreen(
-                onAddDevice = { addClicked = true },
-                onOpenDevice = { _, _ -> },
-                viewModel = DeviceListViewModel(DeviceRepository(ScriptedApiService(emptyList()))),
-            )
-        }
-
-        composeRule.onNodeWithTag(DeviceListTestTags.ADD_BUTTON).performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag(DeviceListTestTags.JOIN_BY_TOKEN_MENU_ITEM).fetchSemanticsNodes().isNotEmpty()
-        }
-        composeRule.onNodeWithTag(DeviceListTestTags.JOIN_BY_TOKEN_MENU_ITEM).performClick()
-
-        assert(addClicked)
-    }
-
-    @Test
-    fun addButtonOpensMenuAndCreateDeviceTriggersCallback() {
-        var createClicked = false
-        composeRule.setContent {
-            DeviceListScreen(
-                onAddDevice = {},
-                onOpenDevice = { _, _ -> },
-                onCreateDevice = { createClicked = true },
-                viewModel = DeviceListViewModel(DeviceRepository(ScriptedApiService(emptyList()))),
-            )
-        }
-
-        composeRule.onNodeWithTag(DeviceListTestTags.ADD_BUTTON).performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            composeRule.onAllNodesWithTag(DeviceListTestTags.CREATE_DEVICE_MENU_ITEM).fetchSemanticsNodes().isNotEmpty()
-        }
-        composeRule.onNodeWithTag(DeviceListTestTags.CREATE_DEVICE_MENU_ITEM).performClick()
-
-        assert(createClicked)
     }
 }

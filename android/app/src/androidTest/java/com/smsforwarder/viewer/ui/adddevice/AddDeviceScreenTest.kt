@@ -93,6 +93,27 @@ class AddDeviceScreenTest {
     }
 
     @Test
+    fun scanButtonIsVisibleRegardlessOfCameraPermissionState() {
+        // Spec 0011: the scan button must always be visible (it's the request
+        // entry point when permission isn't granted yet), not hidden until
+        // permission already exists. Actually driving the system permission
+        // dialog isn't automatable in a plain Compose test - see spec's
+        // disclosed limitation - so this only asserts the button itself is
+        // reachable, independent of whatever the test runner's current grant
+        // state happens to be.
+        composeRule.setContent {
+            AddDeviceScreen(
+                onDeviceAdded = {},
+                viewModel = AddDeviceViewModel(
+                    DeviceRepository(ScriptedApiService(Response.success(CreateBindingResponse(1, "Phone")))),
+                ),
+            )
+        }
+
+        composeRule.onNodeWithTag(AddDeviceTestTags.SCAN_TOGGLE).assertExists()
+    }
+
+    @Test
     fun invalidTokenShowsError() {
         composeRule.setContent {
             AddDeviceScreen(

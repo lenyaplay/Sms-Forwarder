@@ -80,7 +80,7 @@ class RealBackendServerSetupToRegisterTest {
     }
 
     private fun buildRealApiService(baseUrl: String): ApiService {
-        val client = NetworkModule.provideOkHttpClient(TokenStore(context()), SessionEvents(), baseUrl)
+        val client = NetworkModule.provideOkHttpClient(TokenStore(context()), SessionEvents(), store)
         val retrofit = NetworkModule.provideRetrofit(client, NetworkModule.provideJson(), baseUrl)
         return NetworkModule.provideApiService(retrofit)
     }

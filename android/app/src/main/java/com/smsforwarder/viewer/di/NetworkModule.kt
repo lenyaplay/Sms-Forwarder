@@ -7,6 +7,7 @@ import com.smsforwarder.viewer.data.local.TokenStore
 import com.smsforwarder.viewer.data.remote.ApiService
 import com.smsforwarder.viewer.data.remote.AuthAuthenticator
 import com.smsforwarder.viewer.data.remote.AuthInterceptor
+import com.smsforwarder.viewer.data.remote.DynamicBaseUrlInterceptor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -15,6 +16,7 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import javax.inject.Named
@@ -63,16 +65,25 @@ object NetworkModule {
     fun provideOkHttpClient(
         tokenStore: TokenStore,
         sessionEvents: SessionEvents,
-        @Named("baseUrl") baseUrl: String,
+        serverConfigStore: ServerConfigStore,
     ): OkHttpClient = OkHttpClient.Builder()
+        // Rewrites every request's host to whatever ServerConfigStore holds
+        // right now, not the value baked into Retrofit's baseUrl() at
+        // singleton-construction time - see DynamicBaseUrlInterceptor's own
+        // doc comment for why this is required (spec 0011).
+        .addInterceptor(DynamicBaseUrlInterceptor(serverConfigStore))
         .addInterceptor(AuthInterceptor(tokenStore))
-        .authenticator(AuthAuthenticator(baseUrl, tokenStore, sessionEvents))
+        .addInterceptor(HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BODY })
+        .authenticator(AuthAuthenticator(serverConfigStore, tokenStore, sessionEvents))
         .build()
 
     @Provides
     @Singleton
     fun provideRetrofit(okHttpClient: OkHttpClient, json: Json, @Named("baseUrl") baseUrl: String): Retrofit =
         Retrofit.Builder()
+            // baseUrl here only needs to be syntactically valid - the actual
+            // host used for every real request is rewritten per-call by
+            // DynamicBaseUrlInterceptor above, reading the live saved URL.
             .baseUrl(baseUrl)
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))

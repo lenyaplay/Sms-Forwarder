@@ -76,6 +76,14 @@
 
 См. [спецификацию 0010-android-onboarding-self-service](specs/0010-android-onboarding-self-service.md).
 
+## Milestone 10 — Экран создания устройства, исправление разрешения камеры, тёмная тема (Android)
+
+- [ ] Экран создания устройства (минтинг `upload_token`) — пересмотр решения спек 0007/0010, создание устройства теперь доступно из UI
+- [ ] Исправление запроса разрешения на камеру на экране добавления устройства (кнопка сканирования QR видна всегда, разрешение запрашивается по нажатию)
+- [ ] Исправление контраста тёмной темы (тёмный текст на тёмном фоне из-за отсутствия `Surface` в `SmsForwarderViewerTheme`)
+
+См. [спецификацию 0011-device-creation-qr-permission-dark-theme](specs/0011-device-creation-qr-permission-dark-theme.md).
+
 ## Milestone 8 — Backlog (пост-MVP, не приоритизировано)
 
 - [ ] Push-уведомления (FCM) в Viewer App

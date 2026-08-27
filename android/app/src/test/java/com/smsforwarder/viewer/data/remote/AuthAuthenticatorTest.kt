@@ -1,5 +1,6 @@
 package com.smsforwarder.viewer.data.remote
 
+import com.smsforwarder.viewer.data.local.ServerConfigStore
 import com.smsforwarder.viewer.data.local.SessionEvents
 import com.smsforwarder.viewer.data.local.TokenStore
 import com.smsforwarder.viewer.data.local.Tokens
@@ -22,6 +23,7 @@ class AuthAuthenticatorTest {
     private lateinit var server: MockWebServer
     private lateinit var tokenStore: TokenStore
     private lateinit var sessionEvents: SessionEvents
+    private lateinit var serverConfigStore: ServerConfigStore
 
     @Before
     fun setUp() {
@@ -29,6 +31,8 @@ class AuthAuthenticatorTest {
         server.start()
         tokenStore = mock()
         sessionEvents = mock()
+        serverConfigStore = mock()
+        whenever(serverConfigStore.getUrl()).thenReturn(server.url("/").toString())
     }
 
     @After
@@ -49,7 +53,7 @@ class AuthAuthenticatorTest {
         server.enqueue(MockResponse().setResponseCode(200).setBody("ok")) // retried original request
 
         val client = OkHttpClient.Builder()
-            .authenticator(AuthAuthenticator(server.url("/").toString(), tokenStore, sessionEvents))
+            .authenticator(AuthAuthenticator(serverConfigStore, tokenStore, sessionEvents))
             .build()
 
         val response = client.newCall(Request.Builder().url(server.url("/protected")).build()).execute()
@@ -66,7 +70,7 @@ class AuthAuthenticatorTest {
         server.enqueue(MockResponse().setResponseCode(401)) // /auth/refresh rejects too
 
         val client = OkHttpClient.Builder()
-            .authenticator(AuthAuthenticator(server.url("/").toString(), tokenStore, sessionEvents))
+            .authenticator(AuthAuthenticator(serverConfigStore, tokenStore, sessionEvents))
             .build()
 
         val response = client.newCall(Request.Builder().url(server.url("/protected")).build()).execute()
@@ -82,7 +86,7 @@ class AuthAuthenticatorTest {
         server.enqueue(MockResponse().setResponseCode(401))
 
         val client = OkHttpClient.Builder()
-            .authenticator(AuthAuthenticator(server.url("/").toString(), tokenStore, sessionEvents))
+            .authenticator(AuthAuthenticator(serverConfigStore, tokenStore, sessionEvents))
             .build()
 
         val response = client.newCall(Request.Builder().url(server.url("/protected")).build()).execute()

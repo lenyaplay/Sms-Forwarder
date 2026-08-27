@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -23,6 +25,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -34,6 +39,8 @@ object DeviceListTestTags {
     const val EMPTY_STATE = "device_list_empty_state"
     const val ADD_BUTTON = "device_list_add_button"
     const val SETTINGS_BUTTON = "device_list_settings_button"
+    const val JOIN_BY_TOKEN_MENU_ITEM = "device_list_join_by_token_menu_item"
+    const val CREATE_DEVICE_MENU_ITEM = "device_list_create_device_menu_item"
     fun deviceItem(id: Long) = "device_list_item_$id"
     fun manageButton(id: Long) = "device_list_manage_button_$id"
 }
@@ -44,9 +51,11 @@ fun DeviceListScreen(
     onOpenDevice: (deviceId: Long, deviceName: String) -> Unit,
     onOpenSettings: () -> Unit = {},
     onManageDevice: (deviceId: Long, deviceName: String) -> Unit = { _, _ -> },
+    onCreateDevice: () -> Unit = {},
     viewModel: DeviceListViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var menuExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -64,11 +73,31 @@ fun DeviceListScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddDevice,
-                modifier = Modifier.testTag(DeviceListTestTags.ADD_BUTTON),
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add device")
+            Box {
+                FloatingActionButton(
+                    onClick = { menuExpanded = true },
+                    modifier = Modifier.testTag(DeviceListTestTags.ADD_BUTTON),
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add device")
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Join by token") },
+                        onClick = {
+                            menuExpanded = false
+                            onAddDevice()
+                        },
+                        modifier = Modifier.testTag(DeviceListTestTags.JOIN_BY_TOKEN_MENU_ITEM),
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Create new device") },
+                        onClick = {
+                            menuExpanded = false
+                            onCreateDevice()
+                        },
+                        modifier = Modifier.testTag(DeviceListTestTags.CREATE_DEVICE_MENU_ITEM),
+                    )
+                }
             }
         },
     ) { padding ->
