@@ -1,0 +1,18 @@
+package com.smsforwarder.gateway.data.local.db
+
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+
+enum class DeliveryStatus { PENDING, SENT, FAILED }
+
+@Entity(tableName = "messages")
+data class MessageEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val sender: String,
+    val text: String,
+    val sentStamp: Long?,
+    val receivedStamp: Long,
+    val simSlot: Int?,
+    val deliveryStatus: DeliveryStatus,
+    val createdAt: Long,
+)

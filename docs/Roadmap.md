@@ -93,6 +93,16 @@
 
 См. [спецификацию 0012-token-ux-polish](specs/0012-token-ux-polish.md).
 
+## Milestone 12 — Android Gateway App (собственное SMS-приложение по умолчанию)
+
+- [ ] Новый отдельный Android-проект, устанавливаемый как обычное SMS-приложение и назначаемый дефолтным (`SMS_DELIVER_ACTION`, `WAP_PUSH_DELIVER_ACTION`, `RESPOND_VIA_MESSAGE`, `SENDTO`)
+- [ ] Список диалогов, чтение и отправка SMS, импорт существующей истории из `content://sms`
+- [ ] Определение SIM-слота входящего сообщения и выбор SIM при отправке (дуал-SIM)
+- [ ] Пересылка входящих SMS на существующий backend-webhook (`0003-sms-webhook.md`, без изменений формата/эндпоинта)
+- [ ] Ручное сквозное подтверждение на физическом устройстве, включая приём SMS в фоне/с выключенным экраном — тот сценарий, который был ненадёжен у стороннего Gateway App
+
+См. [спецификацию 0013-android-gateway-app](specs/0013-android-gateway-app.md).
+
 ## Milestone 8 — Backlog (пост-MVP, не приоритизировано)
 
 - [ ] Push-уведомления (FCM) в Viewer App
