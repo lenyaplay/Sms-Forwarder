@@ -2,6 +2,7 @@ package com.smsforwarder.viewer.ui.createdevice
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.smsforwarder.viewer.data.local.ServerConfigStore
 import com.smsforwarder.viewer.data.repository.DeviceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,11 +16,13 @@ data class CreateDeviceUiState(
     val isSubmitting: Boolean = false,
     val errorMessage: String? = null,
     val createdUploadToken: String? = null,
+    val webhookUrl: String? = null,
 )
 
 @HiltViewModel
 class CreateDeviceViewModel @Inject constructor(
     private val deviceRepository: DeviceRepository,
+    private val serverConfigStore: ServerConfigStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CreateDeviceUiState())
@@ -41,7 +44,12 @@ class CreateDeviceViewModel @Inject constructor(
             val result = deviceRepository.createDevice(name)
             result.fold(
                 onSuccess = { response ->
-                    _uiState.value = _uiState.value.copy(isSubmitting = false, createdUploadToken = response.upload_token)
+                    val serverUrl = serverConfigStore.getUrl().orEmpty()
+                    _uiState.value = _uiState.value.copy(
+                        isSubmitting = false,
+                        createdUploadToken = response.upload_token,
+                        webhookUrl = "${serverUrl}webhook?upload_token=${response.upload_token}",
+                    )
                 },
                 onFailure = { error ->
                     _uiState.value = _uiState.value.copy(

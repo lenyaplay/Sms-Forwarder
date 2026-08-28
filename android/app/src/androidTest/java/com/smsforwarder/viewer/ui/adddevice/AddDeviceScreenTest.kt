@@ -1,10 +1,14 @@
 package com.smsforwarder.viewer.ui.adddevice
 
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.lifecycle.Lifecycle
+import androidx.test.platform.app.InstrumentationRegistry
 import com.smsforwarder.viewer.data.remote.ApiService
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingRequest
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingResponse
@@ -51,7 +55,7 @@ private class ScriptedApiService(private val bindingResult: Response<CreateBindi
 class AddDeviceScreenTest {
 
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun validTokenAddsDeviceAndNavigatesBack() {
@@ -111,6 +115,47 @@ class AddDeviceScreenTest {
         }
 
         composeRule.onNodeWithTag(AddDeviceTestTags.SCAN_TOGGLE).assertExists()
+    }
+
+    @Test
+    fun permissionGrantedFromSystemSettingsWhileBackgroundedIsPickedUpOnResume() {
+        // Regression test for the same class of bug fixed in
+        // DeviceListScreenTest.screenRefreshesDeviceListOnResume: the
+        // launcher callback alone only catches the in-app permission dialog,
+        // not a grant made from system Settings while the app was
+        // backgrounded. Revoke first so the test doesn't depend on whatever
+        // grant state an earlier test in this run left behind.
+        val packageName = InstrumentationRegistry.getInstrumentation().targetContext.packageName
+        val uiAutomation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        uiAutomation.executeShellCommand("pm revoke $packageName android.permission.CAMERA").close()
+
+        composeRule.setContent {
+            AddDeviceScreen(
+                onDeviceAdded = {},
+                viewModel = AddDeviceViewModel(
+                    DeviceRepository(ScriptedApiService(Response.success(CreateBindingResponse(1, "Phone")))),
+                ),
+            )
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText("Scan QR code instead").fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // Simulate granting via system Settings while backgrounded, then
+        // returning to the app.
+        uiAutomation.executeShellCommand("pm grant $packageName android.permission.CAMERA").close()
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
+        composeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+
+        // The permission state is now current, but showScanner is still
+        // false until the user taps - proves the recheck updated
+        // hasCameraPermission (a click now opens the scanner directly
+        // instead of firing a redundant permission request).
+        composeRule.onNodeWithTag(AddDeviceTestTags.SCAN_TOGGLE).performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText("Hide QR scanner").fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     @Test

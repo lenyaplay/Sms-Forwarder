@@ -15,18 +15,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 object LoginTestTags {
     const val USERNAME_FIELD = "login_username_field"
     const val PASSWORD_FIELD = "login_password_field"
+    const val TOGGLE_PASSWORD_VISIBILITY = "login_toggle_password_visibility"
     const val SUBMIT_BUTTON = "login_submit_button"
     const val ERROR_TEXT = "login_error_text"
     const val CREATE_ACCOUNT_LINK = "login_create_account_link"
@@ -40,6 +45,7 @@ fun LoginScreen(
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var passwordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.loggedIn) {
         if (uiState.loggedIn) onLoggedIn()
@@ -83,8 +89,16 @@ fun LoginScreen(
             onValueChange = viewModel::onPasswordChange,
             label = { Text("Password") },
             singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            trailingIcon = {
+                TextButton(
+                    onClick = { passwordVisible = !passwordVisible },
+                    modifier = Modifier.testTag(LoginTestTags.TOGGLE_PASSWORD_VISIBILITY),
+                ) {
+                    Text(if (passwordVisible) "Hide" else "Show")
+                }
+            },
             modifier = Modifier
                 .padding(top = 8.dp)
                 .testTag(LoginTestTags.PASSWORD_FIELD),

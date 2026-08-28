@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.SavedStateHandle
 import androidx.test.platform.app.InstrumentationRegistry
+import com.smsforwarder.viewer.data.local.ServerConfigStore
 import com.smsforwarder.viewer.data.local.TokenStore
 import com.smsforwarder.viewer.data.repository.AuthRepository
 import com.smsforwarder.viewer.data.repository.DeviceRepository
@@ -115,6 +116,7 @@ class RealBackendOnboardingTest {
 
         val deviceDetailViewModel = DeviceDetailViewModel(
             DeviceRepository(realApiService(ownerTokenStore)),
+            ServerConfigStore(context()),
             SavedStateHandle(mapOf("deviceId" to deviceId)),
         )
         currentScreen = Screen.DeviceDetail(deviceDetailViewModel)

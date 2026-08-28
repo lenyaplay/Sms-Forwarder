@@ -3,6 +3,7 @@ package com.smsforwarder.viewer.ui.devicedetail
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.smsforwarder.viewer.data.local.ServerConfigStore
 import com.smsforwarder.viewer.data.remote.dto.DownloadTokenDto
 import com.smsforwarder.viewer.data.repository.DeviceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,11 +21,13 @@ data class DeviceDetailUiState(
     val isGeneratingInvite: Boolean = false,
     val isReissuing: Boolean = false,
     val errorMessage: String? = null,
+    val webhookUrl: String? = null,
 )
 
 @HiltViewModel
 class DeviceDetailViewModel @Inject constructor(
     private val deviceRepository: DeviceRepository,
+    private val serverConfigStore: ServerConfigStore,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -32,6 +35,9 @@ class DeviceDetailViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(DeviceDetailUiState())
     val uiState: StateFlow<DeviceDetailUiState> = _uiState.asStateFlow()
+
+    private fun webhookUrlFor(uploadToken: String?): String? =
+        uploadToken?.let { "${serverConfigStore.getUrl().orEmpty()}webhook?upload_token=$it" }
 
     init {
         refresh()
@@ -49,6 +55,7 @@ class DeviceDetailViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         uploadToken = uploadToken,
+                        webhookUrl = webhookUrlFor(uploadToken),
                         downloadTokens = tokens,
                     )
                 }
@@ -56,6 +63,7 @@ class DeviceDetailViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         uploadToken = uploadToken,
+                        webhookUrl = webhookUrlFor(uploadToken),
                         errorMessage = error.message ?: "Failed to load device details",
                     )
                 }
@@ -102,7 +110,11 @@ class DeviceDetailViewModel @Inject constructor(
         viewModelScope.launch {
             deviceRepository.reissueUploadToken(deviceId)
                 .onSuccess { response ->
-                    _uiState.value = _uiState.value.copy(isReissuing = false, uploadToken = response.upload_token)
+                    _uiState.value = _uiState.value.copy(
+                        isReissuing = false,
+                        uploadToken = response.upload_token,
+                        webhookUrl = webhookUrlFor(response.upload_token),
+                    )
                 }
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(

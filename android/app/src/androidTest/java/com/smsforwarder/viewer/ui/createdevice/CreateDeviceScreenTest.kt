@@ -1,10 +1,15 @@
 package com.smsforwarder.viewer.ui.createdevice
 
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.test.platform.app.InstrumentationRegistry
+import com.smsforwarder.viewer.data.local.ServerConfigStore
 import com.smsforwarder.viewer.data.remote.ApiService
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingRequest
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingResponse
@@ -52,8 +57,13 @@ class CreateDeviceScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private fun viewModel(result: Response<DeviceCreateResponse>) =
-        CreateDeviceViewModel(DeviceRepository(ScriptedApiService(result)))
+    private fun context() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    private fun viewModel(result: Response<DeviceCreateResponse>): CreateDeviceViewModel {
+        val serverConfigStore = ServerConfigStore(context())
+        serverConfigStore.save("http://test-server.example/")
+        return CreateDeviceViewModel(DeviceRepository(ScriptedApiService(result)), serverConfigStore)
+    }
 
     @Test
     fun successfulCreationShowsUploadTokenAndDone() {
@@ -84,6 +94,67 @@ class CreateDeviceScreenTest {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag(CreateDeviceTestTags.ERROR_TEXT).fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    @Test
+    fun copyTokenButtonCopiesTheExactToken() {
+        val response = Response.success(DeviceCreateResponse(9, "Kitchen phone", "up-tok-123", null, "2026-01-01T00:00:00Z"))
+        composeRule.setContent {
+            CreateDeviceScreen(onDone = {}, viewModel = viewModel(response))
+        }
+
+        composeRule.onNodeWithTag(CreateDeviceTestTags.NAME_FIELD).performTextInput("Kitchen phone")
+        composeRule.onNodeWithTag(CreateDeviceTestTags.CREATE_BUTTON).performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(CreateDeviceTestTags.COPY_TOKEN_BUTTON).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag(CreateDeviceTestTags.COPY_TOKEN_BUTTON).performClick()
+
+        val clipboard = context().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            clipboard.primaryClip?.getItemAt(0)?.text?.toString() == "up-tok-123"
+        }
+    }
+
+    @Test
+    fun copyWebhookUrlButtonCopiesTheFullUrl() {
+        val response = Response.success(DeviceCreateResponse(9, "Kitchen phone", "up-tok-123", null, "2026-01-01T00:00:00Z"))
+        composeRule.setContent {
+            CreateDeviceScreen(onDone = {}, viewModel = viewModel(response))
+        }
+
+        composeRule.onNodeWithTag(CreateDeviceTestTags.NAME_FIELD).performTextInput("Kitchen phone")
+        composeRule.onNodeWithTag(CreateDeviceTestTags.CREATE_BUTTON).performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(CreateDeviceTestTags.COPY_WEBHOOK_URL_BUTTON).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag(CreateDeviceTestTags.COPY_WEBHOOK_URL_BUTTON).performClick()
+
+        val clipboard = context().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            clipboard.primaryClip?.getItemAt(0)?.text?.toString() ==
+                "http://test-server.example/webhook?upload_token=up-tok-123"
+        }
+    }
+
+    @Test
+    fun longTokenDoesNotPushDoneButtonOffscreen() {
+        val longToken = "t".repeat(160)
+        val response = Response.success(DeviceCreateResponse(9, "Kitchen phone", longToken, null, "2026-01-01T00:00:00Z"))
+        composeRule.setContent {
+            CreateDeviceScreen(onDone = {}, viewModel = viewModel(response))
+        }
+
+        composeRule.onNodeWithTag(CreateDeviceTestTags.NAME_FIELD).performTextInput("Kitchen phone")
+        composeRule.onNodeWithTag(CreateDeviceTestTags.CREATE_BUTTON).performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(CreateDeviceTestTags.DONE_BUTTON).fetchSemanticsNodes().isNotEmpty()
+        }
+        // assertIsDisplayed (not assertExists) - the semantics tree includes
+        // off-screen nodes too, so assertExists alone would pass even if the
+        // long token had actually pushed this button outside the viewport.
+        composeRule.onNodeWithTag(CreateDeviceTestTags.DONE_BUTTON).assertIsDisplayed()
     }
 
     @Test

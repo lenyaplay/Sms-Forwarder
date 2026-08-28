@@ -1,5 +1,6 @@
 package com.smsforwarder.viewer.ui.register
 
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -117,5 +118,24 @@ class RegisterScreenTest {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag(RegisterTestTags.ERROR_TEXT).fetchSemanticsNodes().isNotEmpty()
         }
+    }
+
+    @Test
+    fun passwordAndConfirmPasswordVisibilityToggleIndependently() {
+        composeRule.setContent {
+            RegisterScreen(
+                onRegistered = {},
+                onBackToLogin = {},
+                viewModel = viewModel(Response.success(Unit)),
+            )
+        }
+
+        composeRule.onNodeWithTag(RegisterTestTags.TOGGLE_PASSWORD_VISIBILITY).assertTextEquals("Show")
+        composeRule.onNodeWithTag(RegisterTestTags.TOGGLE_CONFIRM_PASSWORD_VISIBILITY).assertTextEquals("Show")
+
+        composeRule.onNodeWithTag(RegisterTestTags.TOGGLE_PASSWORD_VISIBILITY).performClick()
+
+        composeRule.onNodeWithTag(RegisterTestTags.TOGGLE_PASSWORD_VISIBILITY).assertTextEquals("Hide")
+        composeRule.onNodeWithTag(RegisterTestTags.TOGGLE_CONFIRM_PASSWORD_VISIBILITY).assertTextEquals("Show")
     }
 }

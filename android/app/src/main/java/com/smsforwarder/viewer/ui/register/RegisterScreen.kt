@@ -14,17 +14,23 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 object RegisterTestTags {
     const val USERNAME_FIELD = "register_username_field"
     const val PASSWORD_FIELD = "register_password_field"
+    const val TOGGLE_PASSWORD_VISIBILITY = "register_toggle_password_visibility"
     const val CONFIRM_PASSWORD_FIELD = "register_confirm_password_field"
+    const val TOGGLE_CONFIRM_PASSWORD_VISIBILITY = "register_toggle_confirm_password_visibility"
     const val SUBMIT_BUTTON = "register_submit_button"
     const val ERROR_TEXT = "register_error_text"
     const val BACK_TO_LOGIN_LINK = "register_back_to_login_link"
@@ -37,6 +43,8 @@ fun RegisterScreen(
     viewModel: RegisterViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var passwordVisible by remember { mutableStateOf(false) }
+    var confirmPasswordVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.registeredUsername) {
         uiState.registeredUsername?.let(onRegistered)
@@ -64,7 +72,15 @@ fun RegisterScreen(
             onValueChange = viewModel::onPasswordChange,
             label = { Text("Password") },
             singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                TextButton(
+                    onClick = { passwordVisible = !passwordVisible },
+                    modifier = Modifier.testTag(RegisterTestTags.TOGGLE_PASSWORD_VISIBILITY),
+                ) {
+                    Text(if (passwordVisible) "Hide" else "Show")
+                }
+            },
             modifier = Modifier
                 .padding(top = 8.dp)
                 .testTag(RegisterTestTags.PASSWORD_FIELD),
@@ -75,7 +91,15 @@ fun RegisterScreen(
             onValueChange = viewModel::onConfirmPasswordChange,
             label = { Text("Confirm password") },
             singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                TextButton(
+                    onClick = { confirmPasswordVisible = !confirmPasswordVisible },
+                    modifier = Modifier.testTag(RegisterTestTags.TOGGLE_CONFIRM_PASSWORD_VISIBILITY),
+                ) {
+                    Text(if (confirmPasswordVisible) "Hide" else "Show")
+                }
+            },
             modifier = Modifier
                 .padding(top = 8.dp)
                 .testTag(RegisterTestTags.CONFIRM_PASSWORD_FIELD),

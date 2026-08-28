@@ -1,10 +1,15 @@
 package com.smsforwarder.viewer.ui.devicedetail
 
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.lifecycle.SavedStateHandle
+import androidx.test.platform.app.InstrumentationRegistry
+import com.smsforwarder.viewer.data.local.ServerConfigStore
 import com.smsforwarder.viewer.data.remote.ApiService
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingRequest
 import com.smsforwarder.viewer.data.remote.dto.CreateBindingResponse
@@ -67,10 +72,19 @@ class DeviceDetailScreenTest {
     private fun device(uploadToken: String = "current-upload-token") =
         DeviceDto(1, "Phone", "owner", uploadToken, null, "2026-01-01T00:00:00Z")
 
+    private fun context() = InstrumentationRegistry.getInstrumentation().targetContext
+
+    private fun serverConfigStore(): ServerConfigStore {
+        val store = ServerConfigStore(context())
+        store.save("http://test-server.example/")
+        return store
+    }
+
     @Test
     fun uploadTokenIsDisplayed() {
         val viewModel = DeviceDetailViewModel(
             DeviceRepository(ScriptedApiService(listOf(device()), mutableListOf())),
+            serverConfigStore(),
             SavedStateHandle(mapOf("deviceId" to 1L)),
         )
         composeRule.setContent {
@@ -87,6 +101,7 @@ class DeviceDetailScreenTest {
     fun generateInviteShowsQrAndToken() {
         val viewModel = DeviceDetailViewModel(
             DeviceRepository(ScriptedApiService(listOf(device()), mutableListOf())),
+            serverConfigStore(),
             SavedStateHandle(mapOf("deviceId" to 1L)),
         )
         composeRule.setContent {
@@ -109,6 +124,7 @@ class DeviceDetailScreenTest {
         val existingToken = DownloadTokenDto(5, "existing-token", null, null, null, "2026-01-01T00:00:00Z")
         val viewModel = DeviceDetailViewModel(
             DeviceRepository(ScriptedApiService(listOf(device()), mutableListOf(existingToken))),
+            serverConfigStore(),
             SavedStateHandle(mapOf("deviceId" to 1L)),
         )
         composeRule.setContent {
@@ -127,5 +143,94 @@ class DeviceDetailScreenTest {
         composeRule.waitUntil(timeoutMillis = 10_000) {
             composeRule.onAllNodesWithTag(DeviceDetailTestTags.downloadTokenItem(5)).fetchSemanticsNodes().isEmpty()
         }
+    }
+
+    @Test
+    fun copyUploadTokenButtonCopiesTheExactToken() {
+        val viewModel = DeviceDetailViewModel(
+            DeviceRepository(ScriptedApiService(listOf(device("up-tok-123")), mutableListOf())),
+            serverConfigStore(),
+            SavedStateHandle(mapOf("deviceId" to 1L)),
+        )
+        composeRule.setContent {
+            DeviceDetailScreen(deviceName = "Phone", onBack = {}, viewModel = viewModel)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(DeviceDetailTestTags.COPY_UPLOAD_TOKEN_BUTTON).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag(DeviceDetailTestTags.COPY_UPLOAD_TOKEN_BUTTON).performClick()
+
+        val clipboard = context().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            clipboard.primaryClip?.getItemAt(0)?.text?.toString() == "up-tok-123"
+        }
+    }
+
+    @Test
+    fun copyWebhookUrlButtonCopiesTheFullUrl() {
+        val viewModel = DeviceDetailViewModel(
+            DeviceRepository(ScriptedApiService(listOf(device("up-tok-123")), mutableListOf())),
+            serverConfigStore(),
+            SavedStateHandle(mapOf("deviceId" to 1L)),
+        )
+        composeRule.setContent {
+            DeviceDetailScreen(deviceName = "Phone", onBack = {}, viewModel = viewModel)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(DeviceDetailTestTags.COPY_WEBHOOK_URL_BUTTON).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag(DeviceDetailTestTags.COPY_WEBHOOK_URL_BUTTON).performClick()
+
+        val clipboard = context().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            clipboard.primaryClip?.getItemAt(0)?.text?.toString() ==
+                "http://test-server.example/webhook?upload_token=up-tok-123"
+        }
+    }
+
+    @Test
+    fun copyDownloadTokenButtonCopiesTheExactToken() {
+        val existingToken = DownloadTokenDto(5, "existing-token", null, null, null, "2026-01-01T00:00:00Z")
+        val viewModel = DeviceDetailViewModel(
+            DeviceRepository(ScriptedApiService(listOf(device()), mutableListOf(existingToken))),
+            serverConfigStore(),
+            SavedStateHandle(mapOf("deviceId" to 1L)),
+        )
+        composeRule.setContent {
+            DeviceDetailScreen(deviceName = "Phone", onBack = {}, viewModel = viewModel)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(DeviceDetailTestTags.copyDownloadTokenButton(5)).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag(DeviceDetailTestTags.copyDownloadTokenButton(5)).performClick()
+
+        val clipboard = context().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            clipboard.primaryClip?.getItemAt(0)?.text?.toString() == "existing-token"
+        }
+    }
+
+    @Test
+    fun longDownloadTokenDoesNotPushRevokeButtonOffscreen() {
+        val longToken = DownloadTokenDto(5, "t".repeat(160), null, null, null, "2026-01-01T00:00:00Z")
+        val viewModel = DeviceDetailViewModel(
+            DeviceRepository(ScriptedApiService(listOf(device()), mutableListOf(longToken))),
+            serverConfigStore(),
+            SavedStateHandle(mapOf("deviceId" to 1L)),
+        )
+        composeRule.setContent {
+            DeviceDetailScreen(deviceName = "Phone", onBack = {}, viewModel = viewModel)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(DeviceDetailTestTags.revokeButton(5)).fetchSemanticsNodes().isNotEmpty()
+        }
+        // assertIsDisplayed (not assertExists) - the semantics tree includes
+        // off-screen nodes too, so assertExists alone would pass even if the
+        // long token had actually pushed this button outside the viewport.
+        composeRule.onNodeWithTag(DeviceDetailTestTags.revokeButton(5)).assertIsDisplayed()
     }
 }

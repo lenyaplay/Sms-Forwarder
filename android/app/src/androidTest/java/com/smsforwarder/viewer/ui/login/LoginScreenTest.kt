@@ -1,5 +1,6 @@
 package com.smsforwarder.viewer.ui.login
 
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -97,5 +98,19 @@ class LoginScreenTest {
             composeRule.onAllNodesWithTag(LoginTestTags.ERROR_TEXT).fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag(LoginTestTags.ERROR_TEXT).assertExists()
+    }
+
+    @Test
+    fun togglingPasswordVisibilityFlipsTheToggleLabel() {
+        composeRule.setContent {
+            LoginScreen(
+                onLoggedIn = {},
+                viewModel = viewModel(Response.success(TokenPairResponse("acc", "ref"))),
+            )
+        }
+
+        composeRule.onNodeWithTag(LoginTestTags.TOGGLE_PASSWORD_VISIBILITY).assertTextEquals("Show")
+        composeRule.onNodeWithTag(LoginTestTags.TOGGLE_PASSWORD_VISIBILITY).performClick()
+        composeRule.onNodeWithTag(LoginTestTags.TOGGLE_PASSWORD_VISIBILITY).assertTextEquals("Hide")
     }
 }
