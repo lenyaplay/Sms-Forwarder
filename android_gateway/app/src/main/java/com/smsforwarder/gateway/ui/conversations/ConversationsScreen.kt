@@ -1,5 +1,6 @@
-package com.smsforwarder.gateway.ui.messages
+package com.smsforwarder.gateway.ui.conversations
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,38 +15,41 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.smsforwarder.gateway.data.local.db.MessageEntity
+import com.smsforwarder.gateway.data.local.db.ConversationEntity
 
-object MessagesTestTags {
-    const val LIST = "messages_list"
-    fun row(id: Long) = "messages_row_$id"
+object ConversationsTestTags {
+    const val LIST = "conversations_list"
+    fun row(sender: String) = "conversations_row_$sender"
 }
 
 @Composable
-fun MessagesScreen(viewModel: MessagesViewModel = hiltViewModel()) {
+fun ConversationsScreen(
+    viewModel: ConversationsViewModel = hiltViewModel(),
+    onOpenThread: (String) -> Unit,
+) {
     val uiState by viewModel.uiState.collectAsState()
-    MessagesContent(messages = uiState.messages)
+    ConversationsContent(conversations = uiState.conversations, onOpenThread = onOpenThread)
 }
 
 @Composable
-fun MessagesContent(messages: List<MessageEntity>) {
+fun ConversationsContent(conversations: List<ConversationEntity>, onOpenThread: (String) -> Unit) {
     Scaffold { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(padding)
-                .testTag(MessagesTestTags.LIST),
+                .testTag(ConversationsTestTags.LIST),
         ) {
-            items(messages, key = { it.id }) { message ->
+            items(conversations, key = { it.sender }) { conversation ->
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(12.dp)
-                        .testTag(MessagesTestTags.row(message.id)),
+                        .clickable { onOpenThread(conversation.sender) }
+                        .testTag(ConversationsTestTags.row(conversation.sender)),
                 ) {
-                    Text(text = message.sender)
-                    Text(text = message.text)
-                    Text(text = message.deliveryStatus.name)
+                    Text(text = conversation.sender)
+                    Text(text = conversation.text)
                 }
             }
         }

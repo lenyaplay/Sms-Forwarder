@@ -1,32 +1,25 @@
 package com.smsforwarder.gateway.sms
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.ui.Modifier
+import com.smsforwarder.gateway.MainActivity
 
 /**
  * Required for default-SMS-app eligibility (SENDTO intent-filter, `sms:`/`mms:`
- * schemes). A full compose-a-message UI is a later stage (spec 0013) - this
- * stub only needs to accept the intent without crashing.
+ * schemes). Hands off to MainActivity/GatewayNavGraph rather than hosting its
+ * own screen, since ThreadScreen's ViewModel expects a Navigation-Compose
+ * "sender" nav arg that only exists inside that NavHost.
  */
 class SendToActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val destination = intent?.data?.schemeSpecificPart
-        setContent {
-            MaterialTheme {
-                Scaffold { padding ->
-                    Text(
-                        text = "Отправка сообщений появится в следующем этапе. Получатель: ${destination.orEmpty()}",
-                        modifier = Modifier.padding(padding),
-                    )
-                }
-            }
-        }
+        val destination = intent?.data?.schemeSpecificPart?.substringBefore('?')
+        startActivity(
+            Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra(MainActivity.EXTRA_OPEN_SENDER, destination)
+        )
+        finish()
     }
 }

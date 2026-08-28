@@ -34,9 +34,17 @@ open class GatewayConfigStore(context: Context) {
         return WebhookUrlBuilder.build(serverUrl, token)
     }
 
+    /** Guards the one-time content://sms import so it doesn't re-run on every default-app grant/app restart. */
+    open fun isHistoryImported(): Boolean = prefs.getBoolean(KEY_HISTORY_IMPORTED, false)
+
+    open fun markHistoryImported() {
+        prefs.edit().putBoolean(KEY_HISTORY_IMPORTED, true).apply()
+    }
+
     private companion object {
         const val PREFS_NAME = "sms_forwarder_gateway_config"
         const val KEY_SERVER_URL = "server_url"
         const val KEY_UPLOAD_TOKEN = "upload_token"
+        const val KEY_HISTORY_IMPORTED = "history_imported"
     }
 }

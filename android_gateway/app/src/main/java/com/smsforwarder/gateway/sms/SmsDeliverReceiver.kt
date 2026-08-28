@@ -36,7 +36,7 @@ class SmsDeliverReceiver : BroadcastReceiver() {
         val text = messages.joinToString(separator = "") { it.messageBody ?: "" }
         val sentStamp = messages[0].timestampMillis
         val receivedStamp = System.currentTimeMillis()
-        val simSlot = detectSimSlot(intent)
+        val simSlot = SimSlotResolver.resolve(intent)
 
         val pendingResult = goAsync()
         scope.launch {
@@ -55,24 +55,5 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 pendingResult.finish()
             }
         }
-    }
-
-    /**
-     * `subscription`/`android.telephony.extra.SLOT_INDEX` are the modern,
-     * officially documented extras SMS_DELIVER carries the SIM slot in - no
-     * need for the third-party Gateway App's ~9-key Bundle-name heuristic,
-     * which existed only to compensate for its use of the unofficial
-     * SMS_RECEIVED extras rather than the standard SmsMessage/telephony APIs.
-     */
-    private fun detectSimSlot(intent: Intent): Int? {
-        if (intent.hasExtra("android.telephony.extra.SLOT_INDEX")) {
-            val slot = intent.getIntExtra("android.telephony.extra.SLOT_INDEX", -1)
-            if (slot >= 0) return slot
-        }
-        if (intent.hasExtra("slot")) {
-            val slot = intent.getIntExtra("slot", -1)
-            if (slot >= 0) return slot
-        }
-        return null
     }
 }

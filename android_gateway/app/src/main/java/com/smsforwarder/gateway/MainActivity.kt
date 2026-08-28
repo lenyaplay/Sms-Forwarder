@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.smsforwarder.gateway.ui.nav.GatewayNavGraph
@@ -43,18 +44,35 @@ object MainActivityTestTags {
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    // Mutable state, not a local val: SendToActivity launches this Activity with
+    // FLAG_ACTIVITY_CLEAR_TOP, which Android delivers to an already-running
+    // instance via onNewIntent() instead of a fresh onCreate() - without this,
+    // the extra would silently be dropped whenever the app is already open.
+    private val openSender = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        openSender.value = intent?.getStringExtra(EXTRA_OPEN_SENDER)
         setContent {
             SmsForwarderGatewayTheme {
-                MainContent()
+                MainContent(openSender = openSender.value)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openSender.value = intent.getStringExtra(EXTRA_OPEN_SENDER)
+    }
+
+    companion object {
+        const val EXTRA_OPEN_SENDER = "open_sender"
     }
 }
 
 @Composable
-private fun MainContent() {
+private fun MainContent(openSender: String? = null) {
     val context = LocalContext.current
     var isDefault by remember { mutableStateOf(isDefaultSmsApp(context)) }
 
@@ -88,7 +106,9 @@ private fun MainContent() {
     }
 
     if (isDefault) {
-        GatewayNavGraph()
+        val mainViewModel: MainViewModel = hiltViewModel()
+        LaunchedEffect(Unit) { mainViewModel.importHistoryIfNeeded() }
+        GatewayNavGraph(openSender = openSender)
     } else {
         Scaffold { padding ->
             Column(modifier = Modifier.padding(padding).padding(16.dp)) {

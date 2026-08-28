@@ -19,7 +19,9 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GatewayDatabase =
-        Room.databaseBuilder(context, GatewayDatabase::class.java, "gateway.db").build()
+        Room.databaseBuilder(context, GatewayDatabase::class.java, "gateway.db")
+            .addMigrations(GatewayDatabase.MIGRATION_1_2)
+            .build()
 
     @Provides
     fun provideMessageDao(database: GatewayDatabase): MessageDao = database.messageDao()

@@ -5,6 +5,8 @@ import androidx.room.PrimaryKey
 
 enum class DeliveryStatus { PENDING, SENT, FAILED }
 
+enum class MessageDirection { IN, OUT }
+
 @Entity(tableName = "messages")
 data class MessageEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -15,4 +17,5 @@ data class MessageEntity(
     val simSlot: Int?,
     val deliveryStatus: DeliveryStatus,
     val createdAt: Long,
+    val direction: MessageDirection = MessageDirection.IN,
 )
