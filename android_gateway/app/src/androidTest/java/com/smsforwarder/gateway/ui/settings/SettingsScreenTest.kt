@@ -75,6 +75,19 @@ class SettingsScreenTest {
     }
 
     @Test
+    fun copyButtonCopiesTheUploadTokenToTheClipboard() {
+        var clipboardManager: androidx.compose.ui.platform.ClipboardManager? = null
+        composeRule.setContent {
+            clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+            SettingsScreen(viewModel = SettingsViewModel(mockStore("https://example.com", "tok-123"), mockRepository()))
+        }
+
+        composeRule.onNodeWithTag(SettingsTestTags.COPY_TOKEN_BUTTON).performClick()
+
+        org.junit.Assert.assertEquals("tok-123", clipboardManager!!.getText()?.text)
+    }
+
+    @Test
     fun savingRetriesAnyUndeliveredMessages() {
         val repository = mockRepository()
         composeRule.setContent {

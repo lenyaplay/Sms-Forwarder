@@ -6,6 +6,9 @@ data class ThreadUiState(
     val sender: String,
     val draft: String = "",
     val messages: List<MessageEntity> = emptyList(),
+    val contactName: String? = null,
+    val isSending: Boolean = false,
 ) {
-    val canSend: Boolean get() = draft.isNotBlank()
+    val title: String get() = contactName ?: sender
+    val canSend: Boolean get() = draft.isNotBlank() && !isSending
 }

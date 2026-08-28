@@ -61,6 +61,19 @@ class ThreadScreenTest {
     }
 
     @Test
+    fun sendingStateHidesSendButtonAndDisablesDraftField() {
+        composeRule.setContent {
+            ThreadContent(
+                uiState = ThreadUiState(sender = "+15551234", draft = "hi", isSending = true),
+                actions = RecordingActions(),
+            )
+        }
+
+        composeRule.onNodeWithTag(ThreadTestTags.SEND_BUTTON).assertDoesNotExist()
+        composeRule.onNodeWithTag(ThreadTestTags.DRAFT_FIELD).assertIsNotEnabled()
+    }
+
+    @Test
     fun retryButtonOnlyShownForFailedMessagesAndInvokesOnRetry() {
         val actions = RecordingActions()
         composeRule.setContent {

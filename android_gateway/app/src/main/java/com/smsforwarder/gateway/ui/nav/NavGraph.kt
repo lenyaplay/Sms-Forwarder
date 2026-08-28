@@ -71,7 +71,7 @@ fun GatewayNavGraph(openSender: String? = null) {
             composable(
                 Routes.THREAD,
                 arguments = listOf(navArgument("sender") { type = NavType.StringType }),
-            ) { ThreadScreen() }
+            ) { ThreadScreen(onBack = { navController.popBackStack() }) }
         }
     }
 }

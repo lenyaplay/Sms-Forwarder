@@ -9,9 +9,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,10 +30,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import android.Manifest
 import android.content.pm.PackageManager
@@ -81,6 +92,8 @@ private fun MainContent(openSender: String? = null) {
     }
     val notificationPermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    val contactsPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     // Recheck on every resume, not only via the role-request launcher callback -
     // the user can also change the default SMS app from system Settings
@@ -103,6 +116,11 @@ private fun MainContent(openSender: String? = null) {
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+        }
     }
 
     if (isDefault) {
@@ -111,11 +129,33 @@ private fun MainContent(openSender: String? = null) {
         GatewayNavGraph(openSender = openSender)
     } else {
         Scaffold { padding ->
-            Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(
+                    Icons.Default.Sms,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                )
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Чтобы приложение надёжно принимало SMS, назначьте его приложением по умолчанию для SMS.",
+                    text = "Не является SMS-приложением по умолчанию",
+                    style = MaterialTheme.typography.titleLarge,
+                    textAlign = TextAlign.Center,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Только приложение по умолчанию гарантированно получает каждое SMS - иначе система может отдать сообщение другому приложению и никогда не показать его здесь. Назначьте SMS Forwarder Gateway приложением по умолчанию, чтобы ничего не терять.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.testTag(MainActivityTestTags.IS_DEFAULT_LABEL),
                 )
+                Spacer(modifier = Modifier.height(24.dp))
                 Button(
                     onClick = { launcher.launch(defaultSmsRequestIntent(context)) },
                     modifier = Modifier.testTag(MainActivityTestTags.REQUEST_DEFAULT_SMS_BUTTON),

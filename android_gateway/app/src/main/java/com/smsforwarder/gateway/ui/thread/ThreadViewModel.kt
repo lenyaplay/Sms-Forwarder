@@ -4,13 +4,16 @@ import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.smsforwarder.gateway.data.local.ContactNameResolver
 import com.smsforwarder.gateway.data.repository.MessageRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 interface ThreadActions {
@@ -23,6 +26,7 @@ interface ThreadActions {
 class ThreadViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: MessageRepository,
+    private val contactNameResolver: ContactNameResolver,
 ) : ViewModel(), ThreadActions {
 
     private val sender: String = checkNotNull(savedStateHandle["sender"])
@@ -36,6 +40,10 @@ class ThreadViewModel @Inject constructor(
                 _uiState.update { it.copy(messages = messages) }
             }
         }
+        viewModelScope.launch {
+            val name = withContext(Dispatchers.IO) { contactNameResolver.displayNameFor(sender) }
+            _uiState.update { it.copy(contactName = name) }
+        }
     }
 
     override fun onDraftChange(value: String) {
@@ -46,7 +54,7 @@ class ThreadViewModel @Inject constructor(
         val state = _uiState.value
         if (!state.canSend) return
         val text = state.draft
-        _uiState.update { it.copy(draft = "") }
+        _uiState.update { it.copy(draft = "", isSending = true) }
         viewModelScope.launch {
             try {
                 repository.sendMessage(sender, text)
@@ -56,6 +64,8 @@ class ThreadViewModel @Inject constructor(
                 // app; restore the draft so the user doesn't lose their text.
                 Log.e("ThreadViewModel", "failed to send SMS to $sender", e)
                 _uiState.update { it.copy(draft = text) }
+            } finally {
+                _uiState.update { it.copy(isSending = false) }
             }
         }
     }
