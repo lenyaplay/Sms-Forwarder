@@ -1,6 +1,8 @@
 package com.smsforwarder.gateway.ui.thread
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +18,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
@@ -31,6 +36,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -39,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.MessageDirection
 import com.smsforwarder.gateway.data.local.db.MessageEntity
+import com.smsforwarder.gateway.ui.common.ConfirmDialog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -48,14 +57,19 @@ object ThreadTestTags {
     const val DRAFT_FIELD = "thread_draft_field"
     const val SEND_BUTTON = "thread_send_button"
     const val SIM_SELECTOR = "thread_sim_selector"
+    const val DELETE_CONVERSATION_BUTTON = "thread_delete_conversation_button"
+    const val DELETE_MESSAGE_MENU_ITEM = "thread_delete_message_menu_item"
     fun retryButton(id: Long) = "thread_retry_button_$id"
     fun simChip(subscriptionId: Int) = "thread_sim_chip_$subscriptionId"
+    fun bubble(id: Long) = "thread_bubble_$id"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThreadScreen(viewModel: ThreadViewModel = hiltViewModel(), onBack: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
+    var showDeleteConversationConfirm by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -65,10 +79,31 @@ fun ThreadScreen(viewModel: ThreadViewModel = hiltViewModel(), onBack: () -> Uni
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 },
+                actions = {
+                    IconButton(
+                        onClick = { showDeleteConversationConfirm = true },
+                        modifier = Modifier.testTag(ThreadTestTags.DELETE_CONVERSATION_BUTTON),
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Удалить диалог")
+                    }
+                },
             )
         },
     ) { padding ->
         ThreadContent(uiState = uiState, actions = viewModel, modifier = Modifier.padding(padding))
+    }
+
+    if (showDeleteConversationConfirm) {
+        ConfirmDialog(
+            title = "Удалить диалог?",
+            text = "Все сообщения с ${uiState.title} будут удалены безвозвратно.",
+            onConfirm = {
+                viewModel.onDeleteConversation()
+                showDeleteConversationConfirm = false
+                onBack()
+            },
+            onDismiss = { showDeleteConversationConfirm = false },
+        )
     }
 }
 
@@ -90,7 +125,11 @@ fun ThreadContent(uiState: ThreadUiState, actions: ThreadActions, modifier: Modi
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             items(uiState.messages, key = { it.id }) { message ->
-                MessageBubble(message = message, onRetry = { actions.onRetry(message.id) })
+                MessageBubble(
+                    message = message,
+                    onRetry = { actions.onRetry(message.id) },
+                    onDelete = { actions.onDeleteMessage(message.id) },
+                )
             }
         }
         if (uiState.showSimSelector) {
@@ -136,9 +175,13 @@ fun ThreadContent(uiState: ThreadUiState, actions: ThreadActions, modifier: Modi
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MessageBubble(message: MessageEntity, onRetry: () -> Unit) {
+private fun MessageBubble(message: MessageEntity, onRetry: () -> Unit, onDelete: () -> Unit) {
     val isOutgoing = message.direction == MessageDirection.OUT
+    var showMenu by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
@@ -150,7 +193,9 @@ private fun MessageBubble(message: MessageEntity, onRetry: () -> Unit) {
                     color = if (isOutgoing) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(12.dp),
                 )
-                .padding(10.dp),
+                .combinedClickable(onClick = {}, onLongClick = { showMenu = true })
+                .padding(10.dp)
+                .testTag(ThreadTestTags.bubble(message.id)),
         ) {
             Text(
                 text = message.text,
@@ -169,7 +214,29 @@ private fun MessageBubble(message: MessageEntity, onRetry: () -> Unit) {
                     Text("Повторить", color = MaterialTheme.colorScheme.error)
                 }
             }
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text("Удалить") },
+                    onClick = {
+                        showMenu = false
+                        showDeleteConfirm = true
+                    },
+                    modifier = Modifier.testTag(ThreadTestTags.DELETE_MESSAGE_MENU_ITEM),
+                )
+            }
         }
+    }
+
+    if (showDeleteConfirm) {
+        ConfirmDialog(
+            title = "Удалить сообщение?",
+            text = "Сообщение будет удалено безвозвратно.",
+            onConfirm = {
+                onDelete()
+                showDeleteConfirm = false
+            },
+            onDismiss = { showDeleteConfirm = false },
+        )
     }
 }
 

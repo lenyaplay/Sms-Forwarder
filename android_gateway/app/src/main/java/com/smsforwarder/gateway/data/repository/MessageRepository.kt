@@ -8,6 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.smsforwarder.gateway.data.local.db.ConversationEntity
+import com.smsforwarder.gateway.data.local.db.ConversationMetaEntity
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.MessageDao
 import com.smsforwarder.gateway.data.local.db.MessageDirection
@@ -15,7 +16,9 @@ import com.smsforwarder.gateway.data.local.db.MessageEntity
 import com.smsforwarder.gateway.data.remote.OutgoingSmsSender
 import com.smsforwarder.gateway.data.remote.WebhookRequestWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,9 +31,33 @@ open class MessageRepository @Inject constructor(
 ) {
     open fun observeMessages(): Flow<List<MessageEntity>> = messageDao.observeAll()
 
-    open fun observeConversations(): Flow<List<ConversationEntity>> = messageDao.observeConversations()
+    open fun observeConversations(archived: Boolean = false): Flow<List<ConversationEntity>> =
+        messageDao.observeConversations(archived)
 
     open fun observeThread(sender: String): Flow<List<MessageEntity>> = messageDao.observeThread(sender)
+
+    open fun searchMessages(query: String): Flow<List<MessageEntity>> = messageDao.searchMessages(query)
+
+    open suspend fun archiveConversation(sender: String) {
+        messageDao.setConversationMeta(ConversationMetaEntity(sender, isArchived = true))
+    }
+
+    open suspend fun unarchiveConversation(sender: String) {
+        messageDao.setConversationMeta(ConversationMetaEntity(sender, isArchived = false))
+    }
+
+    /**
+     * NonCancellable: callers (e.g. ThreadScreen) may navigate away and clear
+     * their ViewModel's scope right after triggering this, which would
+     * otherwise cancel the delete mid-flight and leave it half-done.
+     */
+    open suspend fun deleteConversation(sender: String) = withContext(NonCancellable) {
+        messageDao.deleteConversationAndMeta(sender)
+    }
+
+    open suspend fun deleteMessage(id: Long) = withContext(NonCancellable) {
+        messageDao.deleteById(id)
+    }
 
     /**
      * Re-enqueues delivery for every message not yet SENT (PENDING - never

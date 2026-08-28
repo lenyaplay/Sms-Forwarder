@@ -78,7 +78,7 @@ class MessageDaoTest {
         dao.insert(message().copy(sender = "+15551234", text = "second", createdAt = 2L))
         dao.insert(message().copy(sender = "+15559999", text = "other", createdAt = 3L))
 
-        val conversations = dao.observeConversations().first()
+        val conversations = dao.observeConversations(archived = false).first()
 
         assertEquals(2, conversations.size)
         val firstConversation = conversations.first { it.sender == "+15551234" }
@@ -95,7 +95,7 @@ class MessageDaoTest {
         dao.insert(message().copy(sender = "A", text = "A-new", createdAt = 200L))
         dao.insert(message().copy(sender = "B", text = "B-last", createdAt = 100L))
 
-        val conversations = dao.observeConversations().first()
+        val conversations = dao.observeConversations(archived = false).first()
 
         assertEquals(2, conversations.size)
         assertEquals("A-new", conversations.first { it.sender == "A" }.text)
@@ -113,5 +113,56 @@ class MessageDaoTest {
         assertEquals(2, thread.size)
         assertEquals("first", thread[0].text)
         assertEquals("second", thread[1].text)
+    }
+
+    @Test
+    fun searchMessagesFindsAMatchThatIsNotTheLastMessageInItsThread() = runBlocking {
+        dao.insert(message().copy(sender = "+15551234", text = "find me here", createdAt = 1L))
+        dao.insert(message().copy(sender = "+15551234", text = "unrelated newer message", createdAt = 2L))
+
+        val results = dao.searchMessages("find me").first()
+
+        assertEquals(1, results.size)
+        assertEquals("find me here", results[0].text)
+    }
+
+    @Test
+    fun deleteBySenderRemovesAllMessagesOfThatSenderOnly() = runBlocking {
+        dao.insert(message().copy(sender = "+15551234"))
+        dao.insert(message().copy(sender = "+15551234"))
+        dao.insert(message().copy(sender = "+15559999"))
+
+        dao.deleteBySender("+15551234")
+
+        val remaining = dao.observeAll().first()
+        assertEquals(1, remaining.size)
+        assertEquals("+15559999", remaining[0].sender)
+    }
+
+    @Test
+    fun deleteByIdRemovesOnlyThatMessage() = runBlocking {
+        val keptId = dao.insert(message().copy(text = "keep"))
+        val deletedId = dao.insert(message().copy(text = "delete me"))
+
+        dao.deleteById(deletedId)
+
+        val remaining = dao.observeAll().first()
+        assertEquals(1, remaining.size)
+        assertEquals(keptId, remaining[0].id)
+    }
+
+    @Test
+    fun observeConversationsFiltersByArchivedStatusDefaultingToNotArchived() = runBlocking {
+        dao.insert(message().copy(sender = "+15551234", text = "active"))
+        dao.insert(message().copy(sender = "+15559999", text = "archived"))
+        dao.setConversationMeta(ConversationMetaEntity(sender = "+15559999", isArchived = true))
+
+        val active = dao.observeConversations(archived = false).first()
+        val archived = dao.observeConversations(archived = true).first()
+
+        assertEquals(1, active.size)
+        assertEquals("+15551234", active[0].sender)
+        assertEquals(1, archived.size)
+        assertEquals("+15559999", archived[0].sender)
     }
 }

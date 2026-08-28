@@ -20,7 +20,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GatewayDatabase =
         Room.databaseBuilder(context, GatewayDatabase::class.java, "gateway.db")
-            .addMigrations(GatewayDatabase.MIGRATION_1_2)
+            .addMigrations(GatewayDatabase.MIGRATION_1_2, GatewayDatabase.MIGRATION_2_3)
             .build()
 
     @Provides

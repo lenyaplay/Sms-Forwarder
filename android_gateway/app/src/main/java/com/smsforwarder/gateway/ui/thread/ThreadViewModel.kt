@@ -22,6 +22,8 @@ interface ThreadActions {
     fun onSend()
     fun onRetry(messageId: Long)
     fun onSelectSim(subscriptionId: Int)
+    fun onDeleteMessage(messageId: Long)
+    fun onDeleteConversation()
 }
 
 @HiltViewModel
@@ -84,5 +86,13 @@ class ThreadViewModel @Inject constructor(
 
     override fun onRetry(messageId: Long) {
         viewModelScope.launch { repository.retryMessage(messageId) }
+    }
+
+    override fun onDeleteMessage(messageId: Long) {
+        viewModelScope.launch { repository.deleteMessage(messageId) }
+    }
+
+    override fun onDeleteConversation() {
+        viewModelScope.launch { repository.deleteConversation(sender) }
     }
 }

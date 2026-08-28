@@ -57,4 +57,42 @@ class ThreadViewModelTest {
 
         runBlocking { verify(repository).sendMessage(sender, "hi", 2, 1) }
     }
+
+    @Test
+    fun onDeleteConversationDeletesByThisThreadsSender() {
+        val sender = "+15551234"
+        val repository: MessageRepository = mock()
+        whenever(repository.observeThread(sender)).thenReturn(flowOf(emptyList()))
+        val contactNameResolver: ContactNameResolver = mock()
+        val simOptionsProvider: SimOptionsProvider = mock()
+        whenever(simOptionsProvider.activeSims()).thenReturn(emptyList())
+
+        lateinit var viewModel: ThreadViewModel
+        composeRule.setContent {
+            viewModel = ThreadViewModel(SavedStateHandle(mapOf("sender" to sender)), repository, contactNameResolver, simOptionsProvider)
+        }
+
+        viewModel.onDeleteConversation()
+
+        runBlocking { verify(repository).deleteConversation(sender) }
+    }
+
+    @Test
+    fun onDeleteMessageDeletesTheGivenMessageId() {
+        val sender = "+15551234"
+        val repository: MessageRepository = mock()
+        whenever(repository.observeThread(sender)).thenReturn(flowOf(emptyList()))
+        val contactNameResolver: ContactNameResolver = mock()
+        val simOptionsProvider: SimOptionsProvider = mock()
+        whenever(simOptionsProvider.activeSims()).thenReturn(emptyList())
+
+        lateinit var viewModel: ThreadViewModel
+        composeRule.setContent {
+            viewModel = ThreadViewModel(SavedStateHandle(mapOf("sender" to sender)), repository, contactNameResolver, simOptionsProvider)
+        }
+
+        viewModel.onDeleteMessage(42L)
+
+        runBlocking { verify(repository).deleteMessage(42L) }
+    }
 }
