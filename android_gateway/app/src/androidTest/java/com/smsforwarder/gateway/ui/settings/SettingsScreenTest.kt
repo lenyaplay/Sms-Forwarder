@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import com.smsforwarder.gateway.data.local.GatewayConfigStore
+import com.smsforwarder.gateway.data.repository.MessageRepository
+import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.mockito.kotlin.mock
@@ -25,10 +27,16 @@ class SettingsScreenTest {
         return store
     }
 
+    private fun mockRepository(): MessageRepository {
+        val repository: MessageRepository = mock()
+        runBlocking { whenever(repository.retryUndeliveredMessages()).thenReturn(Unit) }
+        return repository
+    }
+
     @Test
     fun displaysPreviouslySavedValues() {
         composeRule.setContent {
-            SettingsScreen(viewModel = SettingsViewModel(mockStore("https://example.com", "tok-123")))
+            SettingsScreen(viewModel = SettingsViewModel(mockStore("https://example.com", "tok-123"), mockRepository()))
         }
 
         composeRule.onNodeWithText("https://example.com").assertExists()
@@ -38,7 +46,7 @@ class SettingsScreenTest {
     @Test
     fun saveButtonDisabledUntilBothFieldsAreFilled() {
         composeRule.setContent {
-            SettingsScreen(viewModel = SettingsViewModel(mockStore()))
+            SettingsScreen(viewModel = SettingsViewModel(mockStore(), mockRepository()))
         }
 
         composeRule.onNodeWithTag(SettingsTestTags.SAVE_BUTTON).assertExists()
@@ -51,8 +59,9 @@ class SettingsScreenTest {
     @Test
     fun savingPersistsBothFieldsToTheConfigStore() {
         val store = mockStore()
+        val repository = mockRepository()
         composeRule.setContent {
-            SettingsScreen(viewModel = SettingsViewModel(store))
+            SettingsScreen(viewModel = SettingsViewModel(store, repository))
         }
 
         composeRule.onNodeWithTag(SettingsTestTags.SERVER_URL_FIELD).performTextInput("https://example.com")
@@ -63,5 +72,22 @@ class SettingsScreenTest {
             composeRule.onAllNodesWithTag(SettingsTestTags.SAVED_CONFIRMATION).fetchSemanticsNodes().isNotEmpty()
         }
         verify(store).save("https://example.com", "tok-123")
+    }
+
+    @Test
+    fun savingRetriesAnyUndeliveredMessages() {
+        val repository = mockRepository()
+        composeRule.setContent {
+            SettingsScreen(viewModel = SettingsViewModel(mockStore(), repository))
+        }
+
+        composeRule.onNodeWithTag(SettingsTestTags.SERVER_URL_FIELD).performTextInput("https://example.com")
+        composeRule.onNodeWithTag(SettingsTestTags.UPLOAD_TOKEN_FIELD).performTextInput("tok-123")
+        composeRule.onNodeWithTag(SettingsTestTags.SAVE_BUTTON).performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(SettingsTestTags.SAVED_CONFIRMATION).fetchSemanticsNodes().isNotEmpty()
+        }
+        runBlocking { verify(repository).retryUndeliveredMessages() }
     }
 }

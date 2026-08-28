@@ -3,6 +3,7 @@ package com.smsforwarder.gateway.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.smsforwarder.gateway.data.local.GatewayConfigStore
+import com.smsforwarder.gateway.data.repository.MessageRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +21,7 @@ interface SettingsActions {
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val configStore: GatewayConfigStore,
+    private val messageRepository: MessageRepository,
 ) : ViewModel(), SettingsActions {
 
     private val _uiState = MutableStateFlow(
@@ -43,6 +45,7 @@ class SettingsViewModel @Inject constructor(
         if (!state.canSave) return
         viewModelScope.launch {
             configStore.save(state.serverUrl, state.uploadToken)
+            messageRepository.retryUndeliveredMessages()
             _uiState.update { it.copy(isSaved = true) }
         }
     }

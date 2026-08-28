@@ -17,6 +17,9 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE id = :id")
     suspend fun getById(id: Long): MessageEntity?
 
+    @Query("SELECT * FROM messages WHERE deliveryStatus != 'SENT'")
+    suspend fun getUndelivered(): List<MessageEntity>
+
     @Query("SELECT * FROM messages ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<MessageEntity>>
 }

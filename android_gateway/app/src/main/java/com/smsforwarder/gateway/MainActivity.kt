@@ -15,6 +15,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,11 +23,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.smsforwarder.gateway.ui.nav.GatewayNavGraph
 import com.smsforwarder.gateway.ui.theme.SmsForwarderGatewayTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -60,6 +64,20 @@ private fun MainContent() {
     val notificationPermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
+    // Recheck on every resume, not only via the role-request launcher callback -
+    // the user can also change the default SMS app from system Settings
+    // directly while this Activity is merely backgrounded, not recreated.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isDefault = isDefaultSmsApp(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
@@ -89,8 +107,25 @@ private fun MainContent() {
     }
 }
 
-private fun isDefaultSmsApp(context: android.content.Context): Boolean =
-    Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
+/**
+ * Telephony.Sms.getDefaultSmsPackage() reads the legacy
+ * Settings.Secure.SMS_DEFAULT_APPLICATION value, which at least one real
+ * device tested this session (TECNO LI9 / HiOS) never populates even after
+ * RoleManager has genuinely granted ROLE_SMS to this app (confirmed via
+ * `adb shell cmd role get-role-holders android.app.role.SMS` while
+ * `settings get secure sms_default_application` stayed null) - relying on it
+ * alone would permanently show the "not default" screen on such a device
+ * even though SMS_DELIVER is actually being delivered correctly. RoleManager
+ * is the actual source of truth on API 29+; the legacy check is only a
+ * fallback for API < 29, where RoleManager doesn't exist.
+ */
+private fun isDefaultSmsApp(context: android.content.Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        context.getSystemService(RoleManager::class.java).isRoleHeld(RoleManager.ROLE_SMS)
+    } else {
+        Telephony.Sms.getDefaultSmsPackage(context) == context.packageName
+    }
+}
 
 private fun defaultSmsRequestIntent(context: android.content.Context): Intent {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

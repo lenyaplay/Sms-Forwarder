@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
+import android.util.Log
 import com.smsforwarder.gateway.data.repository.MessageRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -40,8 +41,16 @@ class SmsDeliverReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         scope.launch {
             try {
+                // Catches broadly (not just IOException/etc.) - a Room or
+                // notification failure must never crash the process here: the
+                // SMS_DELIVER broadcast has already been consumed at this
+                // point, so an uncaught exception wouldn't retry the delivery,
+                // it would just take down the app for what should be a
+                // logged, recoverable failure.
                 messageRepository.storeAndForward(sender, text, sentStamp, receivedStamp, simSlot)
                 notifier.notifyIncoming(sender, text)
+            } catch (e: Exception) {
+                Log.e("SmsDeliverReceiver", "failed to store/forward incoming SMS", e)
             } finally {
                 pendingResult.finish()
             }
