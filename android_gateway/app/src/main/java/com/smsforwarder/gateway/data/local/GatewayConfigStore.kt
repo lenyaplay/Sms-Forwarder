@@ -41,10 +41,23 @@ open class GatewayConfigStore(context: Context) {
         prefs.edit().putBoolean(KEY_HISTORY_IMPORTED, true).apply()
     }
 
+    /**
+     * High-water mark (content://sms _ID) for incremental sync - rows other
+     * apps write directly to the system SMS provider (e.g. an OEM dialer's
+     * "decline with message") never go through SMS_DELIVER, so this is the
+     * only way to notice them without a full re-import.
+     */
+    open fun lastSyncedSmsRowId(): Long = prefs.getLong(KEY_LAST_SYNCED_SMS_ROW_ID, 0L)
+
+    open fun setLastSyncedSmsRowId(rowId: Long) {
+        prefs.edit().putLong(KEY_LAST_SYNCED_SMS_ROW_ID, rowId).apply()
+    }
+
     private companion object {
         const val PREFS_NAME = "sms_forwarder_gateway_config"
         const val KEY_SERVER_URL = "server_url"
         const val KEY_UPLOAD_TOKEN = "upload_token"
         const val KEY_HISTORY_IMPORTED = "history_imported"
+        const val KEY_LAST_SYNCED_SMS_ROW_ID = "last_synced_sms_row_id"
     }
 }

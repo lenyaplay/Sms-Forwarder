@@ -5,9 +5,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import com.smsforwarder.gateway.data.local.SimOption
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.MessageDirection
 import com.smsforwarder.gateway.data.local.db.MessageEntity
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -20,9 +22,11 @@ class ThreadScreenTest {
         var draft: String = ""
         var sent = false
         var retriedId: Long? = null
+        var selectedSubscriptionId: Int? = null
         override fun onDraftChange(value: String) { draft = value }
         override fun onSend() { sent = true }
         override fun onRetry(messageId: Long) { retriedId = messageId }
+        override fun onSelectSim(subscriptionId: Int) { selectedSubscriptionId = subscriptionId }
     }
 
     private fun message(id: Long, direction: MessageDirection, status: DeliveryStatus = DeliveryStatus.SENT) =
@@ -71,6 +75,38 @@ class ThreadScreenTest {
 
         composeRule.onNodeWithTag(ThreadTestTags.SEND_BUTTON).assertDoesNotExist()
         composeRule.onNodeWithTag(ThreadTestTags.DRAFT_FIELD).assertIsNotEnabled()
+    }
+
+    @Test
+    fun simSelectorHiddenWithOneOrNoSims() {
+        composeRule.setContent {
+            ThreadContent(
+                uiState = ThreadUiState(sender = "+15551234", availableSims = listOf(SimOption(1, 0, "SIM 1"))),
+                actions = RecordingActions(),
+            )
+        }
+
+        composeRule.onNodeWithTag(ThreadTestTags.SIM_SELECTOR).assertDoesNotExist()
+    }
+
+    @Test
+    fun simSelectorShownAndSwitchableWithTwoSims() {
+        val actions = RecordingActions()
+        composeRule.setContent {
+            ThreadContent(
+                uiState = ThreadUiState(
+                    sender = "+15551234",
+                    availableSims = listOf(SimOption(1, 0, "SIM 1"), SimOption(2, 1, "SIM 2")),
+                    selectedSubscriptionId = 1,
+                ),
+                actions = actions,
+            )
+        }
+
+        composeRule.onNodeWithTag(ThreadTestTags.SIM_SELECTOR).assertExists()
+        composeRule.onNodeWithTag(ThreadTestTags.simChip(2)).performClick()
+
+        assertEquals(2, actions.selectedSubscriptionId)
     }
 
     @Test

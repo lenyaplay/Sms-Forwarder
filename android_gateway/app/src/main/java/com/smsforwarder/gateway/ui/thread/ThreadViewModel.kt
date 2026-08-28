@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.smsforwarder.gateway.data.local.ContactNameResolver
+import com.smsforwarder.gateway.data.local.SimOptionsProvider
 import com.smsforwarder.gateway.data.repository.MessageRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +21,7 @@ interface ThreadActions {
     fun onDraftChange(value: String)
     fun onSend()
     fun onRetry(messageId: Long)
+    fun onSelectSim(subscriptionId: Int)
 }
 
 @HiltViewModel
@@ -27,6 +29,7 @@ class ThreadViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: MessageRepository,
     private val contactNameResolver: ContactNameResolver,
+    private val simOptionsProvider: SimOptionsProvider,
 ) : ViewModel(), ThreadActions {
 
     private val sender: String = checkNotNull(savedStateHandle["sender"])
@@ -44,20 +47,29 @@ class ThreadViewModel @Inject constructor(
             val name = withContext(Dispatchers.IO) { contactNameResolver.displayNameFor(sender) }
             _uiState.update { it.copy(contactName = name) }
         }
+        viewModelScope.launch {
+            val sims = withContext(Dispatchers.IO) { simOptionsProvider.activeSims() }
+            _uiState.update { it.copy(availableSims = sims, selectedSubscriptionId = sims.firstOrNull()?.subscriptionId) }
+        }
     }
 
     override fun onDraftChange(value: String) {
         _uiState.update { it.copy(draft = value) }
     }
 
+    override fun onSelectSim(subscriptionId: Int) {
+        _uiState.update { it.copy(selectedSubscriptionId = subscriptionId) }
+    }
+
     override fun onSend() {
         val state = _uiState.value
         if (!state.canSend) return
         val text = state.draft
+        val selectedSim = state.availableSims.find { it.subscriptionId == state.selectedSubscriptionId }
         _uiState.update { it.copy(draft = "", isSending = true) }
         viewModelScope.launch {
             try {
-                repository.sendMessage(sender, text)
+                repository.sendMessage(sender, text, selectedSim?.subscriptionId, selectedSim?.slotIndex)
             } catch (e: Exception) {
                 // SmsManager can throw for reasons outside our control (no SIM,
                 // airplane mode, malformed number) - never let that crash the

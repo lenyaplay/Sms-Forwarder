@@ -55,15 +55,15 @@ open class MessageRepository @Inject constructor(
      * forwarded to the webhook - docs/specs/0003-sms-webhook.md only covers
      * incoming SMS, and that wire contract isn't ours to change unilaterally.
      */
-    open suspend fun sendMessage(destination: String, text: String) {
-        outgoingSmsSender.send(destination, text)
+    open suspend fun sendMessage(destination: String, text: String, subscriptionId: Int? = null, simSlot: Int? = null) {
+        outgoingSmsSender.send(destination, text, subscriptionId)
         messageDao.insert(
             MessageEntity(
                 sender = destination,
                 text = text,
                 sentStamp = System.currentTimeMillis(),
                 receivedStamp = System.currentTimeMillis(),
-                simSlot = null,
+                simSlot = simSlot,
                 deliveryStatus = DeliveryStatus.SENT,
                 createdAt = System.currentTimeMillis(),
                 direction = MessageDirection.OUT,

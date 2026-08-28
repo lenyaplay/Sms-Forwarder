@@ -94,15 +94,23 @@ private fun MainContent(openSender: String? = null) {
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     val contactsPermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    val phoneStatePermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+
+    val mainViewModel: MainViewModel = hiltViewModel()
 
     // Recheck on every resume, not only via the role-request launcher callback -
     // the user can also change the default SMS app from system Settings
     // directly while this Activity is merely backgrounded, not recreated.
+    // Also re-syncs content://sms here as a fallback for GatewayApp's
+    // ContentObserver: if the process was dead while a third party wrote to
+    // that provider directly, no onChange ever fired for it.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 isDefault = isDefaultSmsApp(context)
+                mainViewModel.syncNewMessages()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -121,10 +129,14 @@ private fun MainContent(openSender: String? = null) {
         ) {
             contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
         }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_PHONE_STATE)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            phoneStatePermissionLauncher.launch(Manifest.permission.READ_PHONE_STATE)
+        }
     }
 
     if (isDefault) {
-        val mainViewModel: MainViewModel = hiltViewModel()
         LaunchedEffect(Unit) { mainViewModel.importHistoryIfNeeded() }
         GatewayNavGraph(openSender = openSender)
     } else {

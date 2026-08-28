@@ -9,3 +9,4 @@
 .cxx/
 app/build/
 gradle/wrapper/gradle-wrapper.jar
+window_dump.xml

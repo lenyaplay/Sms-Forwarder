@@ -6,7 +6,12 @@ import javax.inject.Singleton
 
 @Singleton
 open class OutgoingSmsSender @Inject constructor() {
-    open fun send(destination: String, text: String) {
-        SmsManager.getDefault().sendTextMessage(destination, null, text, null, null)
+    open fun send(destination: String, text: String, subscriptionId: Int?) {
+        val smsManager = if (subscriptionId != null) {
+            SmsManager.getSmsManagerForSubscriptionId(subscriptionId)
+        } else {
+            SmsManager.getDefault()
+        }
+        smsManager.sendTextMessage(destination, null, text, null, null)
     }
 }

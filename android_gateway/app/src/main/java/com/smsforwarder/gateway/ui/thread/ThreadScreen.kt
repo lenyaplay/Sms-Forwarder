@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,7 +47,9 @@ object ThreadTestTags {
     const val LIST = "thread_list"
     const val DRAFT_FIELD = "thread_draft_field"
     const val SEND_BUTTON = "thread_send_button"
+    const val SIM_SELECTOR = "thread_sim_selector"
     fun retryButton(id: Long) = "thread_retry_button_$id"
+    fun simChip(subscriptionId: Int) = "thread_sim_chip_$subscriptionId"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,6 +91,24 @@ fun ThreadContent(uiState: ThreadUiState, actions: ThreadActions, modifier: Modi
         ) {
             items(uiState.messages, key = { it.id }) { message ->
                 MessageBubble(message = message, onRetry = { actions.onRetry(message.id) })
+            }
+        }
+        if (uiState.showSimSelector) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .testTag(ThreadTestTags.SIM_SELECTOR),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                uiState.availableSims.forEach { sim ->
+                    FilterChip(
+                        selected = sim.subscriptionId == uiState.selectedSubscriptionId,
+                        onClick = { actions.onSelectSim(sim.subscriptionId) },
+                        label = { Text(sim.displayName) },
+                        modifier = Modifier.testTag(ThreadTestTags.simChip(sim.subscriptionId)),
+                    )
+                }
             }
         }
         Row(
