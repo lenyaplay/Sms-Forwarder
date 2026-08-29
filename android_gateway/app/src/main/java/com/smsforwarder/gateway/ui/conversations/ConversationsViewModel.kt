@@ -31,6 +31,7 @@ data class ConversationsUiState(
     val conversations: List<ConversationUi> = emptyList(),
     val searchResults: List<MessageEntity> = emptyList(),
     val isImporting: Boolean = false,
+    val failedCount: Int = 0,
 ) {
     val isSearching: Boolean get() = query.isNotBlank()
 }
@@ -40,6 +41,7 @@ interface ConversationsActions {
     fun onToggleArchivedView()
     fun onArchiveToggle(sender: String, currentlyArchived: Boolean)
     fun onDeleteConversation(sender: String)
+    fun onResendAllFailed()
 }
 
 @HiltViewModel
@@ -62,6 +64,11 @@ class ConversationsViewModel @Inject constructor(
             }
         }
         observeConversations(archived = false)
+        viewModelScope.launch {
+            repository.observeFailedCount().collect { count ->
+                _uiState.update { it.copy(failedCount = count) }
+            }
+        }
     }
 
     override fun onQueryChange(value: String) {
@@ -92,6 +99,10 @@ class ConversationsViewModel @Inject constructor(
 
     override fun onDeleteConversation(sender: String) {
         viewModelScope.launch { repository.deleteConversation(sender) }
+    }
+
+    override fun onResendAllFailed() {
+        viewModelScope.launch { repository.retryAllFailed() }
     }
 
     private fun observeConversations(archived: Boolean) {

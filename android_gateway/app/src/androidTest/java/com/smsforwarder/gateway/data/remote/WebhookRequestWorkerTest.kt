@@ -51,6 +51,7 @@ class WebhookRequestWorkerTest {
         dao = database.messageDao()
         configStore = mock()
         whenever(configStore.webhookUrl()).thenReturn(server.url("/webhook?upload_token=tok").toString())
+        whenever(configStore.retryMaxAttempts()).thenReturn(10)
     }
 
     @After
@@ -73,9 +74,10 @@ class WebhookRequestWorkerTest {
         )
     }
 
-    private fun buildWorker(messageId: Long) =
+    private fun buildWorker(messageId: Long, runAttemptCount: Int = 0) =
         TestListenableWorkerBuilder<WebhookRequestWorker>(context)
             .setInputData(Data.Builder().putLong(WebhookRequestWorker.KEY_MESSAGE_ID, messageId).build())
+            .setRunAttemptCount(runAttemptCount)
             .setWorkerFactory(object : WorkerFactory() {
                 override fun createWorker(
                     appContext: Context,
@@ -120,6 +122,30 @@ class WebhookRequestWorkerTest {
         val messageId = insertMessage()
 
         val result = buildWorker(messageId).doWork()
+
+        assertEquals(Result.retry(), result)
+        assertEquals(DeliveryStatus.PENDING, dao.getById(messageId)!!.deliveryStatus)
+    }
+
+    @Test
+    fun failsTerminallyAfterConfiguredMaxAttemptsNotHardcodedTen() = runBlocking {
+        whenever(configStore.retryMaxAttempts()).thenReturn(2)
+        server.enqueue(MockResponse().setResponseCode(500))
+        val messageId = insertMessage()
+
+        val result = buildWorker(messageId, runAttemptCount = 2).doWork()
+
+        assertEquals(Result.failure(), result)
+        assertEquals(DeliveryStatus.FAILED, dao.getById(messageId)!!.deliveryStatus)
+    }
+
+    @Test
+    fun stillRetriesBelowConfiguredMaxAttempts() = runBlocking {
+        whenever(configStore.retryMaxAttempts()).thenReturn(2)
+        server.enqueue(MockResponse().setResponseCode(500))
+        val messageId = insertMessage()
+
+        val result = buildWorker(messageId, runAttemptCount = 1).doWork()
 
         assertEquals(Result.retry(), result)
         assertEquals(DeliveryStatus.PENDING, dao.getById(messageId)!!.deliveryStatus)

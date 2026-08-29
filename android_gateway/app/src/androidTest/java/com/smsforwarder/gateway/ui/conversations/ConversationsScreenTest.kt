@@ -8,12 +8,16 @@ import com.smsforwarder.gateway.data.local.ContactNameResolver
 import com.smsforwarder.gateway.data.local.SmsHistoryImporter
 import com.smsforwarder.gateway.data.local.db.ConversationEntity
 import com.smsforwarder.gateway.data.repository.MessageRepository
+import com.smsforwarder.gateway.ui.common.ConfirmDialogTestTags
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 class ConversationsScreenTest {
@@ -78,14 +82,19 @@ class ConversationsScreenTest {
         assertEquals("+15551234", opened)
     }
 
-    @Test
-    fun fabOpensNewMessageDialogAndConfirmingNavigatesToThatNumber() {
-        val repository: MessageRepository = mock()
+    private fun buildScreenViewModel(repository: MessageRepository): ConversationsViewModel {
         whenever(repository.observeConversations()).thenReturn(flowOf(emptyList<ConversationEntity>()))
+        whenever(repository.observeFailedCount()).thenReturn(flowOf(0))
         val contactNameResolver: ContactNameResolver = mock()
         val historyImporter: SmsHistoryImporter = mock()
         whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
-        val viewModel = ConversationsViewModel(repository, contactNameResolver, historyImporter)
+        return ConversationsViewModel(repository, contactNameResolver, historyImporter)
+    }
+
+    @Test
+    fun fabOpensNewMessageDialogAndConfirmingNavigatesToThatNumber() {
+        val repository: MessageRepository = mock()
+        val viewModel = buildScreenViewModel(repository)
 
         var opened: String? = null
         composeRule.setContent {
@@ -110,5 +119,38 @@ class ConversationsScreenTest {
         composeRule.onNodeWithTag(NewMessageDialogTestTags.CONFIRM_BUTTON).performClick()
 
         assertEquals("+15551234", confirmed)
+    }
+
+    @Test
+    fun resendAllFailedButtonHiddenWhenNoFailedMessages() {
+        val repository: MessageRepository = mock()
+        val viewModel = buildScreenViewModel(repository)
+        composeRule.setContent {
+            ConversationsScreen(viewModel = viewModel, onOpenThread = {})
+        }
+
+        composeRule.onNodeWithTag(ConversationsTestTags.RESEND_ALL_FAILED).assertDoesNotExist()
+    }
+
+    @Test
+    fun resendAllFailedButtonShownAndConfirmingInvokesRepository() {
+        val repository: MessageRepository = mock()
+        whenever(repository.observeConversations()).thenReturn(flowOf(emptyList<ConversationEntity>()))
+        whenever(repository.observeFailedCount()).thenReturn(flowOf(2))
+        val contactNameResolver: ContactNameResolver = mock()
+        val historyImporter: SmsHistoryImporter = mock()
+        whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
+        val viewModel = ConversationsViewModel(repository, contactNameResolver, historyImporter)
+        composeRule.setContent {
+            ConversationsScreen(viewModel = viewModel, onOpenThread = {})
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking { viewModel.uiState.first().failedCount == 2 }
+        }
+        composeRule.onNodeWithTag(ConversationsTestTags.RESEND_ALL_FAILED).performClick()
+        composeRule.onNodeWithTag(ConfirmDialogTestTags.CONFIRM_BUTTON).performClick()
+
+        runBlocking { verify(repository).retryAllFailed() }
     }
 }

@@ -13,14 +13,20 @@ object ConfirmDialogTestTags {
 }
 
 @Composable
-fun ConfirmDialog(title: String, text: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun ConfirmDialog(
+    title: String,
+    text: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    confirmLabel: String = "Удалить",
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { Text(text) },
         confirmButton = {
             TextButton(onClick = onConfirm, modifier = Modifier.testTag(ConfirmDialogTestTags.CONFIRM_BUTTON)) {
-                Text("Удалить")
+                Text(confirmLabel)
             }
         },
         dismissButton = {

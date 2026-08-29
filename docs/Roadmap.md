@@ -161,6 +161,20 @@
 
 Тестовое покрытие: юнит-тесты чистой логики матчинга, инструментированные тесты DAO/репозитория/UI (67/67 зелёных на физическом TECNO LI9), дважды живая проверка на устройстве (reception- и forwarding-блокировка реальными SMS, включая повторную проверку после фикса content-семантики). Честный пробел: ветка `SmsDeliverReceiver`, вызывающая reception-проверку, покрыта только живой проверкой и юнит-тестами самой логики матчинга — отдельного инструментированного теста на `BroadcastReceiver.onReceive` нет; аналогично не автотестированы FAB «добавить правило» и клик по строке «редактировать» как навигационные колбэки (сами экраны/действия покрыты по отдельности).
 
+## Milestone 15 — Android Gateway App: настраиваемый retry и bulk resend
+
+Выявлено при анализе issues референсного проекта bogkonstantin/android_income_sms_gateway_webhook (#69, #38, #3) — количество попыток форвардинга и интервал backoff были захардкожены (`MAX_RETRIES=10`, `EXPONENTIAL`/30 сек), не было массового повтора всех `FAILED`-сообщений. Спека: [0016-gateway-retry-config-and-bulk-resend](specs/0016-gateway-retry-config-and-bulk-resend.md) (Implemented).
+
+- [x] Настраиваемые `maxAttempts` (1–50), `baseIntervalSeconds` (10–3600), `backoffPolicy` (`EXPONENTIAL`/`LINEAR`) вместо констант в `WebhookRequestWorker`/`MessageRepository.enqueueDelivery`
+- [x] Новый экран «Доставка» — принимает `webhookUrl`/`uploadToken` (переехали из `SettingsScreen`) + новые retry-настройки с валидацией диапазонов; `SettingsScreen` теперь только точка входа на «Доставка» и «Фильтрация SMS» (своей `ViewModel`/`UiState` больше не имеет)
+- [x] Bulk resend — кнопка «Повторить неудавшиеся» в `TopAppBar` списка диалогов (видна при `FAILED`-сообщениях > 0), с подтверждением через `ConfirmDialog` (получил необязательный параметр `confirmLabel`, существующие места вызова не затронуты); затрагивает только `FAILED`, не `NOT_FORWARDED` (осознанно оставлено фильтру, см. [0015](specs/0015-gateway-sms-filtering.md))
+
+Найдено `peer-review-template` и исправлено: `MessageRepository.retryAllFailed()` изначально не сбрасывал статус сообщения на `PENDING` перед повторной постановкой в очередь (в отличие от уже существующего `retryMessage()`) — из-за этого `observeFailedCount()` продолжал бы считать сообщение как `FAILED`, пока идёт повторная попытка, кнопка bulk resend оставалась бы видимой и повторное нажатие могло поставить дублирующую задачу `WorkManager` для того же сообщения. Исправлено добавлением того же сброса статуса, что и в `retryMessage()`, с регресс-тестом.
+
+Найдено при `analysis-qa-checklist` (не самовольное отклонение от спеки, см. правило в `CLAUDE.md`): дословная формулировка теста в спеке 0016 ("переданные в `WorkRequest` `BackoffCriteria` соответствуют значениям `GatewayConfigStore`, проверяется через `WorkManager.getWorkInfosByTag`") технически невыполнима — `WorkInfo` не раскрывает `BackoffCriteria` для инспекции в тестах. Смысл критерия сохранён эквивалентной проверкой (`verify(configStore).retryBackoffPolicy()`/`retryBaseIntervalSeconds()`), дополненной живой проверкой на устройстве и границей `maxAttempts` в `WebhookRequestWorkerTest`; изменение отражено в тексте спеки.
+
+Тестовое покрытие: юнит-тесты `GatewayConfigStore`, инструментированные тесты `MessageRepository`/`WebhookRequestWorker`/`DeliveryScreen`/`SettingsScreen`/`ConversationsScreen`/`ConversationsViewModel` (80/80 зелёных на физическом TECNO LI9). Живая проверка на устройстве: `maxAttempts=2` с недоступным сервером — реальное SMS дошло до `FAILED` ровно после 2 попыток (подтверждено логами `WorkManager`), не после захардкоженных 10; bulk resend по кнопке в `TopAppBar` реально поставил новую задачу форвардинга для того же сообщения (подтверждено логами).
+
 ## Milestone 8 — Backlog (пост-MVP, не приоритизировано)
 
 - [ ] Push-уведомления (FCM) в Viewer App

@@ -3,9 +3,11 @@ package com.smsforwarder.gateway.data.repository
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.work.BackoffPolicy
 import androidx.work.Configuration
 import androidx.work.testing.SynchronousExecutor
 import androidx.work.testing.WorkManagerTestInitHelper
+import com.smsforwarder.gateway.data.local.GatewayConfigStore
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.GatewayDatabase
 import com.smsforwarder.gateway.data.local.db.MessageDao
@@ -30,6 +32,7 @@ class MessageRepositoryTest {
     private lateinit var database: GatewayDatabase
     private lateinit var messageDao: MessageDao
     private lateinit var filterRuleRepository: FilterRuleRepository
+    private lateinit var configStore: GatewayConfigStore
     private lateinit var repository: MessageRepository
 
     @Before
@@ -40,11 +43,14 @@ class MessageRepositoryTest {
             .build()
         messageDao = database.messageDao()
         filterRuleRepository = mock()
+        configStore = mock()
+        whenever(configStore.retryBackoffPolicy()).thenReturn(BackoffPolicy.EXPONENTIAL)
+        whenever(configStore.retryBaseIntervalSeconds()).thenReturn(30L)
 
         val workConfig = Configuration.Builder().setExecutor(SynchronousExecutor()).build()
         WorkManagerTestInitHelper.initializeTestWorkManager(context, workConfig)
 
-        repository = MessageRepository(messageDao, mock<OutgoingSmsSender>(), filterRuleRepository, context)
+        repository = MessageRepository(messageDao, mock<OutgoingSmsSender>(), filterRuleRepository, configStore, context)
     }
 
     @After
@@ -80,5 +86,54 @@ class MessageRepositoryTest {
         val work = androidx.work.WorkManager.getInstance(ApplicationProvider.getApplicationContext())
             .getWorkInfosByTag(WebhookRequestWorker::class.java.name).get()
         assertTrue(work.isEmpty())
+    }
+
+    @Test
+    fun retryAllFailedEnqueuesOnlyFailedMessagesAndResetsThemToPending() = runBlocking {
+        whenever(filterRuleRepository.shouldAccept(any(), any(), anyOrNull(), any())).thenReturn(true)
+        val failedId = messageDao.insert(
+            com.smsforwarder.gateway.data.local.db.MessageEntity(
+                sender = "+1", text = "failed one", sentStamp = 1L, receivedStamp = 1L, simSlot = 0,
+                deliveryStatus = DeliveryStatus.FAILED, createdAt = 1L,
+            )
+        )
+        messageDao.insert(
+            com.smsforwarder.gateway.data.local.db.MessageEntity(
+                sender = "+2", text = "not forwarded", sentStamp = 1L, receivedStamp = 1L, simSlot = 0,
+                deliveryStatus = DeliveryStatus.NOT_FORWARDED, createdAt = 1L,
+            )
+        )
+        messageDao.insert(
+            com.smsforwarder.gateway.data.local.db.MessageEntity(
+                sender = "+3", text = "sent", sentStamp = 1L, receivedStamp = 1L, simSlot = 0,
+                deliveryStatus = DeliveryStatus.SENT, createdAt = 1L,
+            )
+        )
+
+        repository.retryAllFailed()
+
+        val work = androidx.work.WorkManager.getInstance(ApplicationProvider.getApplicationContext())
+            .getWorkInfosByTag(WebhookRequestWorker::class.java.name).get()
+        assertEquals(1, work.size)
+        // Reset to PENDING so a retry in flight is no longer counted by
+        // observeFailedCount() - otherwise the resend button would stay
+        // visible and a second tap could enqueue duplicate jobs.
+        assertEquals(DeliveryStatus.PENDING, messageDao.getById(failedId)!!.deliveryStatus)
+    }
+
+    @Test
+    fun enqueueDeliveryReadsBackoffCriteriaFromConfigStoreNotHardcodedConstants() = runBlocking {
+        whenever(filterRuleRepository.shouldAccept(any(), any(), anyOrNull(), any())).thenReturn(true)
+
+        repository.storeAndForward("+15551234", "hi", 111L, 222L, simSlot = 0, subscriptionId = 1)
+
+        // WorkInfo doesn't expose BackoffCriteria for inspection in tests, so this
+        // verifies enqueueDelivery actually reads the criteria from configStore
+        // (proving it isn't hardcoded) rather than asserting on WorkManager state;
+        // the applied value is exercised end-to-end by WebhookRequestWorkerTest's
+        // maxAttempts-boundary tests and by live on-device verification.
+        org.mockito.kotlin.verify(configStore).retryBackoffPolicy()
+        org.mockito.kotlin.verify(configStore).retryBaseIntervalSeconds()
+        Unit
     }
 }

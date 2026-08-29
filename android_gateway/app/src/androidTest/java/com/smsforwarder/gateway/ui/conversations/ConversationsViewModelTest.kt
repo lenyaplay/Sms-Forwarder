@@ -34,6 +34,7 @@ class ConversationsViewModelTest {
     ): ConversationsViewModel {
         whenever(repository.observeConversations(false)).thenReturn(flowOf(emptyList<ConversationEntity>()))
         whenever(repository.observeConversations(true)).thenReturn(flowOf(emptyList<ConversationEntity>()))
+        whenever(repository.observeFailedCount()).thenReturn(flowOf(0))
         val historyImporter: SmsHistoryImporter = mock()
         whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
         lateinit var viewModel: ConversationsViewModel
@@ -82,6 +83,7 @@ class ConversationsViewModelTest {
         whenever(repository.observeConversations(true)).thenReturn(
             flowOf(listOf(ConversationEntity("+2", "archived", 1L, com.smsforwarder.gateway.data.local.db.DeliveryStatus.SENT, com.smsforwarder.gateway.data.local.db.MessageDirection.IN)))
         )
+        whenever(repository.observeFailedCount()).thenReturn(flowOf(0))
         val historyImporter: SmsHistoryImporter = mock()
         whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
         lateinit var viewModel: ConversationsViewModel
@@ -117,5 +119,32 @@ class ConversationsViewModelTest {
 
         viewModel.onQueryChange("")
         assertEquals(0, runBlocking { viewModel.uiState.first().searchResults.size })
+    }
+
+    @Test
+    fun onResendAllFailedDelegatesToRepository() {
+        val repository: MessageRepository = mock()
+        val viewModel = buildViewModel(repository)
+
+        viewModel.onResendAllFailed()
+
+        runBlocking { verify(repository).retryAllFailed() }
+    }
+
+    @Test
+    fun failedCountReflectsRepositoryObservation() {
+        val repository: MessageRepository = mock()
+        whenever(repository.observeConversations(false)).thenReturn(flowOf(emptyList<ConversationEntity>()))
+        whenever(repository.observeFailedCount()).thenReturn(flowOf(3))
+        val historyImporter: SmsHistoryImporter = mock()
+        whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
+        lateinit var viewModel: ConversationsViewModel
+        composeRule.setContent {
+            viewModel = ConversationsViewModel(repository, mock(), historyImporter)
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking { viewModel.uiState.first().failedCount == 3 }
+        }
     }
 }

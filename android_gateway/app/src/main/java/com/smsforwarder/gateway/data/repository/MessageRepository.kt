@@ -1,12 +1,12 @@
 package com.smsforwarder.gateway.data.repository
 
 import android.content.Context
-import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.smsforwarder.gateway.data.local.GatewayConfigStore
 import com.smsforwarder.gateway.data.local.db.ConversationEntity
 import com.smsforwarder.gateway.data.local.db.ConversationMetaEntity
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
@@ -29,9 +29,12 @@ open class MessageRepository @Inject constructor(
     private val messageDao: MessageDao,
     private val outgoingSmsSender: OutgoingSmsSender,
     private val filterRuleRepository: FilterRuleRepository,
+    private val configStore: GatewayConfigStore,
     @ApplicationContext private val context: Context,
 ) {
     open fun observeMessages(): Flow<List<MessageEntity>> = messageDao.observeAll()
+
+    open fun observeFailedCount(): Flow<Int> = messageDao.observeFailedCount()
 
     open fun observeConversations(archived: Boolean = false): Flow<List<ConversationEntity>> =
         messageDao.observeConversations(archived)
@@ -89,6 +92,22 @@ open class MessageRepository @Inject constructor(
     }
 
     /**
+     * Bulk "retry all failed" (Conversations action) - only FAILED messages,
+     * same NOT_FORWARDED exclusion rationale as retryUndeliveredMessages: a
+     * filter block is a decision, not a delivery failure. Resets each row to
+     * PENDING before enqueueing (like retryMessage) so a retry in flight is
+     * no longer counted by observeFailedCount() - otherwise the resend
+     * button would stay visible and a second tap could enqueue duplicate
+     * WorkManager jobs for the same messages before the first round finishes.
+     */
+    open suspend fun retryAllFailed() {
+        messageDao.getFailed().forEach { message ->
+            messageDao.update(message.copy(deliveryStatus = DeliveryStatus.PENDING))
+            enqueueDelivery(message.id)
+        }
+    }
+
+    /**
      * Sends an outgoing SMS and stores it locally. Outgoing messages aren't
      * forwarded to the webhook - docs/specs/0003-sms-webhook.md only covers
      * incoming SMS, and that wire contract isn't ours to change unilaterally.
@@ -143,7 +162,7 @@ open class MessageRepository @Inject constructor(
             .build()
         val request = OneTimeWorkRequestBuilder<WebhookRequestWorker>()
             .setConstraints(constraints)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .setBackoffCriteria(configStore.retryBackoffPolicy(), configStore.retryBaseIntervalSeconds(), TimeUnit.SECONDS)
             .setInputData(Data.Builder().putLong(WebhookRequestWorker.KEY_MESSAGE_ID, messageId).build())
             .build()
         WorkManager.getInstance(context).enqueue(request)

@@ -40,16 +40,17 @@ class WebhookRequestWorker @AssistedInject constructor(
         val messageId = inputData.getLong(KEY_MESSAGE_ID, -1)
         if (messageId == -1L) return@withContext Result.failure()
 
+        val maxAttempts = configStore.retryMaxAttempts()
         val message = messageDao.getById(messageId) ?: return@withContext Result.failure()
         val webhookUrl = configStore.webhookUrl()
         if (webhookUrl == null) {
-            // Not configured yet - retry (bounded by MAX_RETRIES like any other
+            // Not configured yet - retry (bounded by maxAttempts like any other
             // failure) rather than failing terminally: the user may configure
             // the server URL/token from Settings after this SMS already
-            // arrived (SettingsViewModel.onSave also re-enqueues any message
+            // arrived (DeliveryViewModel.onSave also re-enqueues any message
             // still not SENT, so this message isn't solely dependent on
             // outliving its own backoff window either).
-            return@withContext if (runAttemptCount >= MAX_RETRIES) Result.failure() else Result.retry()
+            return@withContext if (runAttemptCount >= maxAttempts) Result.failure() else Result.retry()
         }
 
         val payload = WebhookPayloadMapper.toPayload(message)
@@ -67,7 +68,7 @@ class WebhookRequestWorker @AssistedInject constructor(
         if (success) {
             messageDao.update(message.copy(deliveryStatus = DeliveryStatus.SENT))
             Result.success()
-        } else if (runAttemptCount >= MAX_RETRIES) {
+        } else if (runAttemptCount >= maxAttempts) {
             messageDao.update(message.copy(deliveryStatus = DeliveryStatus.FAILED))
             Result.failure()
         } else {
@@ -77,6 +78,5 @@ class WebhookRequestWorker @AssistedInject constructor(
 
     companion object {
         const val KEY_MESSAGE_ID = "message_id"
-        private const val MAX_RETRIES = 10
     }
 }

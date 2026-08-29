@@ -2,6 +2,7 @@ package com.smsforwarder.gateway.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.work.BackoffPolicy
 import com.smsforwarder.gateway.data.local.db.FilterMode
 import com.smsforwarder.gateway.data.local.db.FilterStage
 import com.smsforwarder.gateway.data.remote.WebhookUrlBuilder
@@ -71,6 +72,28 @@ open class GatewayConfigStore(context: Context) {
         FilterStage.FORWARDING -> KEY_FORWARDING_FILTER_MODE
     }
 
+    /** Defaults match the previously-hardcoded WebhookRequestWorker/MessageRepository constants, so an app update doesn't silently change existing retry behavior. */
+    open fun retryMaxAttempts(): Int = prefs.getInt(KEY_RETRY_MAX_ATTEMPTS, 10)
+
+    open fun setRetryMaxAttempts(value: Int) {
+        prefs.edit().putInt(KEY_RETRY_MAX_ATTEMPTS, value).apply()
+    }
+
+    open fun retryBaseIntervalSeconds(): Long = prefs.getLong(KEY_RETRY_BASE_INTERVAL_SECONDS, 30L)
+
+    open fun setRetryBaseIntervalSeconds(value: Long) {
+        prefs.edit().putLong(KEY_RETRY_BASE_INTERVAL_SECONDS, value).apply()
+    }
+
+    open fun retryBackoffPolicy(): BackoffPolicy {
+        val stored = prefs.getString(KEY_RETRY_BACKOFF_POLICY, null) ?: return BackoffPolicy.EXPONENTIAL
+        return runCatching { BackoffPolicy.valueOf(stored) }.getOrDefault(BackoffPolicy.EXPONENTIAL)
+    }
+
+    open fun setRetryBackoffPolicy(value: BackoffPolicy) {
+        prefs.edit().putString(KEY_RETRY_BACKOFF_POLICY, value.name).apply()
+    }
+
     private companion object {
         const val PREFS_NAME = "sms_forwarder_gateway_config"
         const val KEY_SERVER_URL = "server_url"
@@ -79,5 +102,8 @@ open class GatewayConfigStore(context: Context) {
         const val KEY_LAST_SYNCED_SMS_ROW_ID = "last_synced_sms_row_id"
         const val KEY_RECEPTION_FILTER_MODE = "reception_filter_mode"
         const val KEY_FORWARDING_FILTER_MODE = "forwarding_filter_mode"
+        const val KEY_RETRY_MAX_ATTEMPTS = "retry_max_attempts"
+        const val KEY_RETRY_BASE_INTERVAL_SECONDS = "retry_base_interval_seconds"
+        const val KEY_RETRY_BACKOFF_POLICY = "retry_backoff_policy"
     }
 }

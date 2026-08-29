@@ -32,6 +32,12 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE deliveryStatus NOT IN ('SENT', 'NOT_FORWARDED')")
     suspend fun getUndelivered(): List<MessageEntity>
 
+    @Query("SELECT * FROM messages WHERE deliveryStatus = 'FAILED'")
+    suspend fun getFailed(): List<MessageEntity>
+
+    @Query("SELECT COUNT(*) FROM messages WHERE deliveryStatus = 'FAILED'")
+    fun observeFailedCount(): Flow<Int>
+
     @Query("SELECT * FROM messages ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<MessageEntity>>
 

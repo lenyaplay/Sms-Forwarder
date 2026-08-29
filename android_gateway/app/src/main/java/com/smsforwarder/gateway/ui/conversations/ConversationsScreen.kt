@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -57,6 +58,7 @@ object ConversationsTestTags {
     const val NEW_MESSAGE_FAB = "conversations_new_message_fab"
     const val SEARCH_FIELD = "conversations_search_field"
     const val ARCHIVE_TOGGLE = "conversations_archive_toggle"
+    const val RESEND_ALL_FAILED = "conversations_resend_all_failed"
     const val SEARCH_RESULTS_LIST = "conversations_search_results_list"
     fun row(sender: String) = "conversations_row_$sender"
 }
@@ -70,12 +72,21 @@ fun ConversationsScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showNewMessageDialog by remember { mutableStateOf(false) }
     var pendingDeleteSender by remember { mutableStateOf<String?>(null) }
+    var showResendAllConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(if (uiState.isArchivedView) "Архив" else "SMS Forwarder Gateway") },
                 actions = {
+                    if (uiState.failedCount > 0) {
+                        IconButton(
+                            onClick = { showResendAllConfirm = true },
+                            modifier = Modifier.testTag(ConversationsTestTags.RESEND_ALL_FAILED),
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Повторить неудавшиеся")
+                        }
+                    }
                     IconButton(
                         onClick = viewModel::onToggleArchivedView,
                         modifier = Modifier.testTag(ConversationsTestTags.ARCHIVE_TOGGLE),
@@ -141,6 +152,19 @@ fun ConversationsScreen(
                 pendingDeleteSender = null
             },
             onDismiss = { pendingDeleteSender = null },
+        )
+    }
+
+    if (showResendAllConfirm) {
+        ConfirmDialog(
+            title = "Повторить неудавшиеся?",
+            text = "Будет предпринята повторная попытка отправки ${uiState.failedCount} сообщений.",
+            confirmLabel = "Повторить",
+            onConfirm = {
+                viewModel.onResendAllFailed()
+                showResendAllConfirm = false
+            },
+            onDismiss = { showResendAllConfirm = false },
         )
     }
 }
