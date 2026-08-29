@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [MessageEntity::class, ConversationMetaEntity::class, FilterRuleEntity::class, DeliveryLogEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class GatewayDatabase : RoomDatabase() {
@@ -64,6 +64,12 @@ abstract class GatewayDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_messages_sender_createdAt ON messages(sender, createdAt)")
             }
         }
     }

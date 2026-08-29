@@ -1,0 +1,49 @@
+# 0019 — Переход из уведомления в конкретный тред, разворачиваемый текст (Android Gateway App)
+
+**Статус:** Draft
+
+*Требования собраны через `stakeholder-requirements-gathering`, задокументированы в [docs/requirements/0019-0021-requirements-doc.md](../requirements/0019-0021-requirements-doc.md) и [docs/requirements/0019-0021-analysis-brief.md](../requirements/0019-0021-analysis-brief.md) — эта спека их источник истины по деталям реализации.*
+
+## Контекст
+
+Уведомление о новом SMS (`IncomingSmsNotifier.notifyIncoming(sender, text)`) при тапе открывает голый `Intent(context, MainActivity::class.java)` — попадает на список диалогов, не в конкретный тред. При этом `MainActivity` уже содержит полностью рабочую инфраструктуру deep-link (`EXTRA_OPEN_SENDER` extra → `openSender` state → `onNewIntent`/`onCreate` → `GatewayNavGraph(openSender = ...)` → `LaunchedEffect` вызывает `navController.navigate(Routes.thread(sender))`) — она просто не подключена к этому конкретному `PendingIntent`. Отдельно, текст уведомления обрезается стандартным `NotificationCompat.Builder.setContentText` до одной-двух строк — длинные SMS не видны целиком без открытия приложения.
+
+Запрошено напрямую владельцем продукта (не из анализа issues референсного проекта), 2026-08-29.
+
+## Допущения и решения
+
+1. **Deep-link** — переиспользуется уже существующая инфраструктура `EXTRA_OPEN_SENDER`, ничего нового в `MainActivity`/`NavGraph` не создаётся. Единственное изменение — `IncomingSmsNotifier.notifyIncoming` кладёт `sender` в `Intent.putExtra(MainActivity.EXTRA_OPEN_SENDER, sender)` при построении `PendingIntent`.
+2. **Разворачиваемый текст** — `NotificationCompat.BigTextStyle` поверх уже существующего `setContentText`. `setContentText` остаётся для свёрнутого вида (обычное поведение системы — короткий текст в свёрнутом состоянии, полный при разворачивании свайпом), `BigTextStyle.bigText(text)` даёт полный текст в развёрнутом.
+3. Оба изменения — только `sms/IncomingSmsNotifier.kt`; `DeliveryResultNotifier` (уведомления о результате доставки, [0017](0017-gateway-delivery-reliability-and-visibility.md)) не в объёме — у него нет длинного пользовательского текста и нет естественной точки перехода в тред (уведомление про весь форвардинг, не про конкретное сообщение с известным отправителем в UI-состоянии треда).
+4. Каждый повторный тап на несколько разных уведомлений (несколько новых SMS от разных отправителей до открытия приложения) должен открывать именно тред того отправителя, чей это было уведомление — не последнее пришедшее. `PendingIntent`-ы уже используют разные request-код через `nextId` не для этого (это ID самого уведомления в статус-баре, не request-код `PendingIntent`); нужно проверить при реализации, что `PendingIntent.getActivity` с одинаковым `requestCode=0` для разных `sender` не схлопывает intent-ы в один (system caches `PendingIntent` by (context, requestCode, intent action/component/data/type/class/categories) — если extra отличается, а всё остальное одинаково, `FLAG_IMMUTABLE` без `FLAG_UPDATE_CURRENT` может вернуть **старый** закешированный `PendingIntent` с чужим extra). Это реальный риск, зафиксирован как критерий приёмки, не оставлен на предположение.
+
+## Функциональность
+
+- `MainActivity.EXTRA_OPEN_SENDER` делается доступным (уже `public`/`internal` в файле — свериться при реализации, при необходимости поднять видимость до `public` для использования из `sms/`-пакета).
+- `IncomingSmsNotifier.notifyIncoming(sender, text)`:
+  - `Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_OPEN_SENDER, sender)`.
+  - `PendingIntent.getActivity(context, sender.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)` — `requestCode` через `sender.hashCode()` (не константный `0`), плюс `FLAG_UPDATE_CURRENT`, чтобы разные отправители не переиспользовали чужой закешированный `PendingIntent`, и чтобы повторное уведомление от **того же** отправителя обновляло intent актуальным содержимым, а не оставалось на первом созданном.
+  - `.setStyle(NotificationCompat.BigTextStyle().bigText(text))` добавляется в существующий `NotificationCompat.Builder`.
+
+## Архитектура
+
+- Изменения полностью локализованы в `sms/IncomingSmsNotifier.kt`.
+- `MainActivity.kt` — возможно потребуется изменить видимость `EXTRA_OPEN_SENDER` (или вынести константу в отдельный `companion object`, если её сейчас нет как переиспользуемой) — без изменения логики `onNewIntent`/`onCreate`, которая уже корректно обрабатывает extra.
+- Backend/Viewer App не затронуты.
+
+## Критерии приёмки
+
+- Тап на уведомление о новом SMS открывает приложение сразу на экране переписки с отправителем этого SMS (не на списке диалогов).
+- Если пришло два уведомления от разных отправителей (оба не открыты), тап на каждое по отдельности открывает тред именно того отправителя, чьё уведомление нажато — не всегда один и тот же/последний.
+- Развёрнутое уведомление (long-press/свайп вниз в шторке) показывает полный текст SMS, не обрезанный до двух строк; свёрнутый вид не меняется (короткий текст, как раньше).
+- Приложение уже открыто на другом экране (не в фоне) — тап на уведомление всё равно переводит в нужный тред (переиспользуется существующий `onNewIntent`-путь, уже покрытый живой проверкой в Milestone 12 для `sms:`-диплинков).
+
+## Тесты
+
+- Unit: если `EXTRA_OPEN_SENDER`-логика вынесена в тестируемую функцию — покрыть построением `Intent`/`PendingIntent` с ожидаемым extra (проверка через `Intent.getStringExtra`, не через реальный `PendingIntent`, т.к. `PendingIntent` не unit-тестируем без Robolectric/instrumented окружения — свериться при реализации, есть ли в проекте прецедент такого теста).
+- Инструментированный/ручной: реальное уведомление от `IncomingSmsNotifier` (или его тестовый вызов) → тап → приложение открывается на треде нужного отправителя — по аналогии с уже существующим ручным подтверждением deep-link `sms:`-ссылок в Milestone 12.
+- Ручная проверка на физическом устройстве: два уведомления от разных отправителей, тап на каждое по отдельности открывает правильный тред; развёрнутое уведомление показывает длинный текст (SMS >2 строк) полностью.
+
+## Открытые вопросы / Backlog
+
+- Нет — объём фичи полностью закрыт двумя изменениями в одном файле.

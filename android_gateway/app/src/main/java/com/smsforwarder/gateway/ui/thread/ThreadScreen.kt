@@ -110,9 +110,29 @@ fun ThreadScreen(viewModel: ThreadViewModel = hiltViewModel(), onBack: () -> Uni
 @Composable
 fun ThreadContent(uiState: ThreadUiState, actions: ThreadActions, modifier: Modifier = Modifier) {
     val listState = rememberLazyListState()
+    var initialScrollDone by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty()) listState.animateScrollToItem(uiState.messages.lastIndex)
+        if (uiState.messages.isEmpty()) return@LaunchedEffect
+        if (!initialScrollDone) {
+            // First appearance of a (possibly large) history - jump straight to
+            // the target with no visible scroll-through, not an animation.
+            val targetIndex = uiState.scrollToMessageId
+                ?.let { id -> uiState.messages.indexOfFirst { it.id == id } }
+                ?.takeIf { it >= 0 }
+                ?: uiState.messages.lastIndex
+            listState.scrollToItem(targetIndex)
+            initialScrollDone = true
+        } else {
+            listState.animateScrollToItem(uiState.messages.lastIndex)
+        }
     }
+
+    // Memoized once per `actions` identity (stable - the ViewModel instance doesn't
+    // change), not recreated per item per recomposition - passing a fresh closure to
+    // MessageBubble on every keystroke/state update would defeat LazyColumn's ability
+    // to skip recomposing bubbles whose own message data hasn't changed.
+    val onRetry: (Long) -> Unit = remember(actions) { { id -> actions.onRetry(id) } }
+    val onDeleteMessage: (Long) -> Unit = remember(actions) { { id -> actions.onDeleteMessage(id) } }
 
     Column(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -127,8 +147,8 @@ fun ThreadContent(uiState: ThreadUiState, actions: ThreadActions, modifier: Modi
             items(uiState.messages, key = { it.id }) { message ->
                 MessageBubble(
                     message = message,
-                    onRetry = { actions.onRetry(message.id) },
-                    onDelete = { actions.onDeleteMessage(message.id) },
+                    onRetry = onRetry,
+                    onDelete = onDeleteMessage,
                 )
             }
         }
@@ -177,7 +197,7 @@ fun ThreadContent(uiState: ThreadUiState, actions: ThreadActions, modifier: Modi
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MessageBubble(message: MessageEntity, onRetry: () -> Unit, onDelete: () -> Unit) {
+private fun MessageBubble(message: MessageEntity, onRetry: (Long) -> Unit, onDelete: (Long) -> Unit) {
     val isOutgoing = message.direction == MessageDirection.OUT
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -208,7 +228,7 @@ private fun MessageBubble(message: MessageEntity, onRetry: () -> Unit, onDelete:
             )
             if (message.deliveryStatus == DeliveryStatus.FAILED) {
                 TextButton(
-                    onClick = onRetry,
+                    onClick = { onRetry(message.id) },
                     modifier = Modifier.testTag(ThreadTestTags.retryButton(message.id)),
                 ) {
                     Text("Повторить", color = MaterialTheme.colorScheme.error)
@@ -232,7 +252,7 @@ private fun MessageBubble(message: MessageEntity, onRetry: () -> Unit, onDelete:
             title = "Удалить сообщение?",
             text = "Сообщение будет удалено безвозвратно.",
             onConfirm = {
-                onDelete()
+                onDelete(message.id)
                 showDeleteConfirm = false
             },
             onDismiss = { showDeleteConfirm = false },
@@ -240,5 +260,9 @@ private fun MessageBubble(message: MessageEntity, onRetry: () -> Unit, onDelete:
     }
 }
 
+// Single shared formatter, not a fresh SimpleDateFormat per bubble per recomposition -
+// safe because all calls happen on the main/Compose UI thread.
+private val messageTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+
 private fun formatTime(timestampMillis: Long): String =
-    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(timestampMillis))
+    messageTimeFormat.format(Date(timestampMillis))

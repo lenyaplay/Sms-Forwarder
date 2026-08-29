@@ -36,7 +36,12 @@ class ThreadViewModel @Inject constructor(
 
     private val sender: String = checkNotNull(savedStateHandle["sender"])
 
-    private val _uiState = MutableStateFlow(ThreadUiState(sender = sender))
+    // Nav route defaults messageId to 0L when absent (NavType.LongType has no
+    // nullable variant) - 0L is never a real MessageEntity.id (Room autoGenerate
+    // starts at 1), so it unambiguously means "no target message".
+    private val scrollToMessageId: Long? = (savedStateHandle.get<Long>("messageId") ?: 0L).takeIf { it != 0L }
+
+    private val _uiState = MutableStateFlow(ThreadUiState(sender = sender, scrollToMessageId = scrollToMessageId))
     val uiState: StateFlow<ThreadUiState> = _uiState.asStateFlow()
 
     init {

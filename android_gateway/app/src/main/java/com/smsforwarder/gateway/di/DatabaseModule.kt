@@ -27,6 +27,7 @@ object DatabaseModule {
                 GatewayDatabase.MIGRATION_2_3,
                 GatewayDatabase.MIGRATION_3_4,
                 GatewayDatabase.MIGRATION_4_5,
+                GatewayDatabase.MIGRATION_5_6,
             )
             .build()
 

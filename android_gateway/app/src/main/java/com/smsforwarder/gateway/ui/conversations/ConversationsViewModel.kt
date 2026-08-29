@@ -57,6 +57,12 @@ class ConversationsViewModel @Inject constructor(
     private var conversationsJob: Job? = null
     private var searchJob: Job? = null
 
+    // onToggleArchivedView cancels conversationsJob and launches a new one; cancellation
+    // is cooperative, so the old collector's in-flight withContext(Dispatchers.IO) map
+    // pass can still be running when the new one starts on another IO thread - guard
+    // with synchronized rather than assuming a single writer.
+    private val contactNameCache = mutableMapOf<String, String?>()
+
     init {
         viewModelScope.launch {
             historyImporter.isImporting.collect { isImporting ->
@@ -113,7 +119,11 @@ class ConversationsViewModel @Inject constructor(
                     conversations.map { entity ->
                         ConversationUi(
                             sender = entity.sender,
-                            displayName = contactNameResolver.displayNameFor(entity.sender) ?: entity.sender,
+                            displayName = synchronized(contactNameCache) {
+                                contactNameCache.getOrPut(entity.sender) {
+                                    contactNameResolver.displayNameFor(entity.sender)
+                                }
+                            } ?: entity.sender,
                             text = entity.text,
                             createdAt = entity.createdAt,
                         )

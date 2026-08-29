@@ -67,7 +67,7 @@ object ConversationsTestTags {
 @Composable
 fun ConversationsScreen(
     viewModel: ConversationsViewModel = hiltViewModel(),
-    onOpenThread: (String) -> Unit,
+    onOpenThread: (String, Long?) -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showNewMessageDialog by remember { mutableStateOf(false) }
@@ -138,7 +138,7 @@ fun ConversationsScreen(
             onDismiss = { showNewMessageDialog = false },
             onConfirm = { number ->
                 showNewMessageDialog = false
-                onOpenThread(number)
+                onOpenThread(number, null)
             },
         )
     }
@@ -170,7 +170,7 @@ fun ConversationsScreen(
 }
 
 @Composable
-private fun SearchResultsList(results: List<MessageEntity>, onOpenThread: (String) -> Unit) {
+private fun SearchResultsList(results: List<MessageEntity>, onOpenThread: (String, Long?) -> Unit) {
     if (results.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Ничего не найдено", style = MaterialTheme.typography.bodyLarge)
@@ -186,7 +186,7 @@ private fun SearchResultsList(results: List<MessageEntity>, onOpenThread: (Strin
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
-                    .clickable { onOpenThread(message.sender) },
+                    .clickable { onOpenThread(message.sender, message.id) },
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(text = message.sender, style = MaterialTheme.typography.titleMedium)
@@ -202,7 +202,7 @@ fun ConversationsContent(
     conversations: List<ConversationUi>,
     isImporting: Boolean,
     isArchivedView: Boolean = false,
-    onOpenThread: (String) -> Unit,
+    onOpenThread: (String, Long?) -> Unit,
     onArchiveToggle: (String) -> Unit = {},
     onDeleteRequested: (String) -> Unit = {},
     modifier: Modifier = Modifier,
@@ -227,12 +227,16 @@ fun ConversationsContent(
                 contentPadding = PaddingValues(8.dp),
             ) {
                 items(conversations, key = { it.sender }) { conversation ->
+                    // Pass the callbacks through unwrapped (not `{ onOpenThread(conversation.sender, null) }`
+                    // recreated per item per recomposition) - a fresh lambda identity here would defeat
+                    // ConversationRow's ability to skip recomposition when scrolling/unrelated state changes,
+                    // since Compose compares these lambda params by identity, not by captured value.
                     ConversationRow(
                         conversation = conversation,
                         isArchivedView = isArchivedView,
-                        onClick = { onOpenThread(conversation.sender) },
-                        onArchiveToggle = { onArchiveToggle(conversation.sender) },
-                        onDeleteRequested = { onDeleteRequested(conversation.sender) },
+                        onOpenThread = onOpenThread,
+                        onArchiveToggle = onArchiveToggle,
+                        onDeleteRequested = onDeleteRequested,
                     )
                 }
             }
@@ -245,19 +249,19 @@ fun ConversationsContent(
 private fun ConversationRow(
     conversation: ConversationUi,
     isArchivedView: Boolean,
-    onClick: () -> Unit,
-    onArchiveToggle: () -> Unit,
-    onDeleteRequested: () -> Unit,
+    onOpenThread: (String, Long?) -> Unit,
+    onArchiveToggle: (String) -> Unit,
+    onDeleteRequested: (String) -> Unit,
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             when (value) {
                 SwipeToDismissBoxValue.StartToEnd -> {
-                    onArchiveToggle()
+                    onArchiveToggle(conversation.sender)
                     false
                 }
                 SwipeToDismissBoxValue.EndToStart -> {
-                    onDeleteRequested()
+                    onDeleteRequested(conversation.sender)
                     false
                 }
                 SwipeToDismissBoxValue.Settled -> true
@@ -285,7 +289,7 @@ private fun ConversationRow(
                 .fillMaxWidth()
                 .padding(vertical = 4.dp)
                 .heightIn(min = 48.dp)
-                .clickable(onClick = onClick)
+                .clickable(onClick = { onOpenThread(conversation.sender, null) })
                 .semantics(mergeDescendants = true) {}
                 .testTag(ConversationsTestTags.row(conversation.sender)),
         ) {
@@ -303,5 +307,9 @@ private fun ConversationRow(
     }
 }
 
+// Single shared formatter, not a fresh SimpleDateFormat per row per recomposition -
+// safe because all calls happen on the main/Compose UI thread.
+private val conversationTimeFormat = SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
+
 private fun formatConversationTime(timestampMillis: Long): String =
-    SimpleDateFormat("dd.MM HH:mm", Locale.getDefault()).format(Date(timestampMillis))
+    conversationTimeFormat.format(Date(timestampMillis))

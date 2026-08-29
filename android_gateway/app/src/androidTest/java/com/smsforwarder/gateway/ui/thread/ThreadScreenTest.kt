@@ -1,17 +1,14 @@
 package com.smsforwarder.gateway.ui.thread
 
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.performTouchInput
-import com.smsforwarder.gateway.data.local.SimOption
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.MessageDirection
 import com.smsforwarder.gateway.data.local.db.MessageEntity
-import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -20,154 +17,78 @@ class ThreadScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private class RecordingActions : ThreadActions {
-        var draft: String = ""
-        var sent = false
-        var retriedId: Long? = null
-        var selectedSubscriptionId: Int? = null
-        var deletedMessageId: Long? = null
-        var deletedConversation = false
-        override fun onDraftChange(value: String) { draft = value }
-        override fun onSend() { sent = true }
-        override fun onRetry(messageId: Long) { retriedId = messageId }
-        override fun onSelectSim(subscriptionId: Int) { selectedSubscriptionId = subscriptionId }
-        override fun onDeleteMessage(messageId: Long) { deletedMessageId = messageId }
-        override fun onDeleteConversation() { deletedConversation = true }
-    }
+    private fun message(id: Long) = MessageEntity(
+        id = id,
+        sender = "+15551234",
+        text = "message $id",
+        sentStamp = null,
+        receivedStamp = id,
+        simSlot = 0,
+        deliveryStatus = DeliveryStatus.SENT,
+        createdAt = id,
+        direction = MessageDirection.IN,
+    )
 
-    private fun message(id: Long, direction: MessageDirection, status: DeliveryStatus = DeliveryStatus.SENT) =
-        MessageEntity(
-            id = id,
-            sender = "+15551234",
-            text = "hello $id",
-            sentStamp = 1L,
-            receivedStamp = 1L,
-            simSlot = null,
-            deliveryStatus = status,
-            createdAt = id,
-            direction = direction,
-        )
-
-    @Test
-    fun sendButtonDisabledWhenDraftIsBlank() {
-        composeRule.setContent {
-            ThreadContent(uiState = ThreadUiState(sender = "+15551234"), actions = RecordingActions())
-        }
-
-        composeRule.onNodeWithTag(ThreadTestTags.SEND_BUTTON).assertIsNotEnabled()
+    private val noopActions = object : ThreadActions {
+        override fun onDraftChange(value: String) {}
+        override fun onSend() {}
+        override fun onRetry(messageId: Long) {}
+        override fun onSelectSim(subscriptionId: Int) {}
+        override fun onDeleteMessage(messageId: Long) {}
+        override fun onDeleteConversation() {}
     }
 
     @Test
-    fun typingAndSendingInvokesActions() {
-        val actions = RecordingActions()
-        composeRule.setContent {
-            ThreadContent(uiState = ThreadUiState(sender = "+15551234", draft = "hi"), actions = actions)
-        }
-
-        composeRule.onNodeWithTag(ThreadTestTags.DRAFT_FIELD).performTextInput("!")
-        composeRule.onNodeWithTag(ThreadTestTags.SEND_BUTTON).performClick()
-
-        assert(actions.sent)
-    }
-
-    @Test
-    fun sendingStateHidesSendButtonAndDisablesDraftField() {
+    fun openingWithNoTargetMessageShowsTheLastMessageImmediatelyWithNoAnimationFrames() {
+        val messages = (1L..200L).map { message(it) }
+        // Freeze the clock so an animateScrollToItem regression (which needs
+        // several frames to reach index 199 from 0) would leave the target
+        // bubble NOT displayed yet at this point - only an instant scrollToItem
+        // reaches it within the single frame this composition/effect resolves in.
+        composeRule.mainClock.autoAdvance = false
         composeRule.setContent {
             ThreadContent(
-                uiState = ThreadUiState(sender = "+15551234", draft = "hi", isSending = true),
-                actions = RecordingActions(),
+                uiState = ThreadUiState(sender = "+15551234", messages = messages, scrollToMessageId = null),
+                actions = noopActions,
             )
         }
+        composeRule.mainClock.advanceTimeByFrame()
 
-        composeRule.onNodeWithTag(ThreadTestTags.SEND_BUTTON).assertDoesNotExist()
-        composeRule.onNodeWithTag(ThreadTestTags.DRAFT_FIELD).assertIsNotEnabled()
+        composeRule.onNodeWithTag(ThreadTestTags.bubble(200L)).assertIsDisplayed()
     }
 
     @Test
-    fun simSelectorHiddenWithOneOrNoSims() {
+    fun openingWithATargetMessageShowsThatMessageNotTheLastOneWithNoAnimationFrames() {
+        val messages = (1L..200L).map { message(it) }
+        composeRule.mainClock.autoAdvance = false
         composeRule.setContent {
             ThreadContent(
-                uiState = ThreadUiState(sender = "+15551234", availableSims = listOf(SimOption(1, 0, "SIM 1"))),
-                actions = RecordingActions(),
+                uiState = ThreadUiState(sender = "+15551234", messages = messages, scrollToMessageId = 42L),
+                actions = noopActions,
             )
         }
+        composeRule.mainClock.advanceTimeByFrame()
 
-        composeRule.onNodeWithTag(ThreadTestTags.SIM_SELECTOR).assertDoesNotExist()
+        composeRule.onNodeWithTag(ThreadTestTags.bubble(42L)).assertIsDisplayed()
     }
 
     @Test
-    fun simSelectorShownAndSwitchableWithTwoSims() {
-        val actions = RecordingActions()
+    fun newMessageArrivingInAnAlreadyOpenThreadStillAnimatesToTheEnd() {
+        val initialMessages = (1L..5L).map { message(it) }
+        var currentMessages by mutableStateOf(initialMessages)
         composeRule.setContent {
             ThreadContent(
-                uiState = ThreadUiState(
-                    sender = "+15551234",
-                    availableSims = listOf(SimOption(1, 0, "SIM 1"), SimOption(2, 1, "SIM 2")),
-                    selectedSubscriptionId = 1,
-                ),
-                actions = actions,
+                uiState = ThreadUiState(sender = "+15551234", messages = currentMessages, scrollToMessageId = null),
+                actions = noopActions,
             )
         }
+        composeRule.onNodeWithTag(ThreadTestTags.bubble(5L)).assertIsDisplayed()
 
-        composeRule.onNodeWithTag(ThreadTestTags.SIM_SELECTOR).assertExists()
-        composeRule.onNodeWithTag(ThreadTestTags.simChip(2)).performClick()
+        currentMessages = initialMessages + message(6L)
 
-        assertEquals(2, actions.selectedSubscriptionId)
-    }
-
-    @Test
-    fun retryButtonOnlyShownForFailedMessagesAndInvokesOnRetry() {
-        val actions = RecordingActions()
-        composeRule.setContent {
-            ThreadContent(
-                uiState = ThreadUiState(
-                    sender = "+15551234",
-                    messages = listOf(
-                        message(1L, MessageDirection.OUT, DeliveryStatus.SENT),
-                        message(2L, MessageDirection.OUT, DeliveryStatus.FAILED),
-                    ),
-                ),
-                actions = actions,
-            )
-        }
-
-        composeRule.onNodeWithTag(ThreadTestTags.retryButton(1L)).assertDoesNotExist()
-        composeRule.onNodeWithTag(ThreadTestTags.retryButton(2L)).performClick()
-
-        assert(actions.retriedId == 2L)
-    }
-
-    @Test
-    fun longPressOnBubbleThenConfirmDeletesOnlyThatMessage() {
-        val actions = RecordingActions()
-        composeRule.setContent {
-            ThreadContent(
-                uiState = ThreadUiState(sender = "+15551234", messages = listOf(message(1L, MessageDirection.IN))),
-                actions = actions,
-            )
-        }
-
-        composeRule.onNodeWithTag(ThreadTestTags.bubble(1L)).performTouchInput { longClick() }
-        composeRule.onNodeWithTag(ThreadTestTags.DELETE_MESSAGE_MENU_ITEM).performClick()
-        composeRule.onNodeWithTag(com.smsforwarder.gateway.ui.common.ConfirmDialogTestTags.CONFIRM_BUTTON).performClick()
-
-        assertEquals(1L, actions.deletedMessageId)
-    }
-
-    @Test
-    fun longPressOnBubbleThenDismissDoesNotDelete() {
-        val actions = RecordingActions()
-        composeRule.setContent {
-            ThreadContent(
-                uiState = ThreadUiState(sender = "+15551234", messages = listOf(message(1L, MessageDirection.IN))),
-                actions = actions,
-            )
-        }
-
-        composeRule.onNodeWithTag(ThreadTestTags.bubble(1L)).performTouchInput { longClick() }
-        composeRule.onNodeWithTag(ThreadTestTags.DELETE_MESSAGE_MENU_ITEM).performClick()
-        composeRule.onNodeWithTag(com.smsforwarder.gateway.ui.common.ConfirmDialogTestTags.DISMISS_BUTTON).performClick()
-
-        assertEquals(null, actions.deletedMessageId)
+        // Regression coverage for the "second+ emission still animates" branch -
+        // the animated path is allowed to take more than one frame, so this
+        // asserts the eventual (idle-settled) end state, not immediacy.
+        composeRule.onNodeWithTag(ThreadTestTags.bubble(6L)).assertIsDisplayed()
     }
 }

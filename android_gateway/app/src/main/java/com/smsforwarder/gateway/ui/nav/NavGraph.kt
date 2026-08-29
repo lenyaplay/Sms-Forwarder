@@ -35,10 +35,10 @@ private object Routes {
     const val SETTINGS = "settings"
     const val DELIVERY = "delivery"
     const val DELIVERY_LOG = "delivery_log"
-    const val THREAD = "thread/{sender}"
+    const val THREAD = "thread/{sender}?messageId={messageId}"
     const val FILTER_RULES = "filter_rules"
     const val FILTER_RULE_EDIT = "filter_rules/edit/{stage}?id={id}"
-    fun thread(sender: String) = "thread/$sender"
+    fun thread(sender: String, messageId: Long? = null) = "thread/$sender?messageId=${messageId ?: 0}"
     fun filterRuleEdit(stage: FilterStage, id: Long?) = "filter_rules/edit/${stage.name}?id=${id ?: 0}"
 }
 
@@ -75,7 +75,7 @@ fun GatewayNavGraph(openSender: String? = null) {
             modifier = Modifier.padding(padding),
         ) {
             composable(Routes.CONVERSATIONS) {
-                ConversationsScreen(onOpenThread = { sender -> navController.navigate(Routes.thread(sender)) })
+                ConversationsScreen(onOpenThread = { sender, messageId -> navController.navigate(Routes.thread(sender, messageId)) })
             }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
@@ -92,7 +92,10 @@ fun GatewayNavGraph(openSender: String? = null) {
             }
             composable(
                 Routes.THREAD,
-                arguments = listOf(navArgument("sender") { type = NavType.StringType }),
+                arguments = listOf(
+                    navArgument("sender") { type = NavType.StringType },
+                    navArgument("messageId") { type = NavType.LongType; defaultValue = 0L },
+                ),
             ) { ThreadScreen(onBack = { navController.popBackStack() }) }
             composable(Routes.FILTER_RULES) {
                 FilterRulesScreen(

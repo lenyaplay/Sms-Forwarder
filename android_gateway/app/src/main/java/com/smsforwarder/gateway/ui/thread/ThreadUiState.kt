@@ -11,6 +11,7 @@ data class ThreadUiState(
     val isSending: Boolean = false,
     val availableSims: List<SimOption> = emptyList(),
     val selectedSubscriptionId: Int? = null,
+    val scrollToMessageId: Long? = null,
 ) {
     val title: String get() = contactName ?: sender
     val canSend: Boolean get() = draft.isNotBlank() && !isSending
