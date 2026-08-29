@@ -13,7 +13,7 @@
 - [README.md](README.md) — что за проект, компоненты, быстрый старт.
 - [docs/Architecture.md](docs/Architecture.md) — устройство системы, модель токенов, модель данных.
 - [docs/Development.md](docs/Development.md) — процесс разработки: спецификация прежде кода, обязательные автотесты, **обязательное использование скилов** (`stakeholder-requirements-gathering`, `query-validation`, `peer-review-template`, `analysis-qa-checklist`) на каждом шаге фичи, структура backend-кода, формат ошибок API.
-- [docs/Roadmap.md](docs/Roadmap.md) — статус этапов, что уже сделано.
+- [docs/Roadmap.md](docs/Roadmap.md) — статус этапов, что уже сделано. Актуальный документ — [docs/roadmaps/Roadmap 2.md](docs/roadmaps/Roadmap%202.md), завершённые этапы — в [docs/roadmaps/Roadmap Archived 1.md](docs/roadmaps/Roadmap%20Archived%201.md).
 - `docs/specs/NNNN-*.md` — спецификация конкретной фичи (перед тем как трогать код этой фичи).
 
 ## Ключевое правило
