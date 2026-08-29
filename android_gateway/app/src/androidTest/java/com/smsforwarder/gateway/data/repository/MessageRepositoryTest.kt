@@ -89,6 +89,60 @@ class MessageRepositoryTest {
     }
 
     @Test
+    fun forwardingPausedBlocksEnqueueButStoresMessage() = runBlocking {
+        whenever(filterRuleRepository.shouldAccept(any(), any(), anyOrNull(), any())).thenReturn(true)
+        whenever(configStore.isForwardingPaused()).thenReturn(true)
+
+        repository.storeAndForward("+15551234", "hi", 111L, 222L, simSlot = 0, subscriptionId = 1)
+
+        val stored = messageDao.observeAll().first()
+        assertEquals(1, stored.size)
+        assertEquals(DeliveryStatus.PENDING, stored[0].deliveryStatus)
+
+        val work = androidx.work.WorkManager.getInstance(ApplicationProvider.getApplicationContext())
+            .getWorkInfosByTag(WebhookRequestWorker::class.java.name).get()
+        assertTrue(work.isEmpty())
+    }
+
+    @Test
+    fun retryMessageNoOpsWhenPausedAndLeavesStatusUntouched() = runBlocking {
+        whenever(configStore.isForwardingPaused()).thenReturn(true)
+        val failedId = messageDao.insert(
+            com.smsforwarder.gateway.data.local.db.MessageEntity(
+                sender = "+1", text = "failed one", sentStamp = 1L, receivedStamp = 1L, simSlot = 0,
+                deliveryStatus = DeliveryStatus.FAILED, createdAt = 1L,
+            )
+        )
+
+        repository.retryMessage(failedId)
+
+        // Must stay FAILED, not flip to PENDING - a PENDING message with no
+        // enqueued WorkManager job would look "in progress" while actually stuck.
+        assertEquals(DeliveryStatus.FAILED, messageDao.getById(failedId)!!.deliveryStatus)
+        val work = androidx.work.WorkManager.getInstance(ApplicationProvider.getApplicationContext())
+            .getWorkInfosByTag(WebhookRequestWorker::class.java.name).get()
+        assertTrue(work.isEmpty())
+    }
+
+    @Test
+    fun retryAllFailedNoOpsWhenPausedAndLeavesStatusUntouched() = runBlocking {
+        whenever(configStore.isForwardingPaused()).thenReturn(true)
+        val failedId = messageDao.insert(
+            com.smsforwarder.gateway.data.local.db.MessageEntity(
+                sender = "+1", text = "failed one", sentStamp = 1L, receivedStamp = 1L, simSlot = 0,
+                deliveryStatus = DeliveryStatus.FAILED, createdAt = 1L,
+            )
+        )
+
+        repository.retryAllFailed()
+
+        assertEquals(DeliveryStatus.FAILED, messageDao.getById(failedId)!!.deliveryStatus)
+        val work = androidx.work.WorkManager.getInstance(ApplicationProvider.getApplicationContext())
+            .getWorkInfosByTag(WebhookRequestWorker::class.java.name).get()
+        assertTrue(work.isEmpty())
+    }
+
+    @Test
     fun retryAllFailedEnqueuesOnlyFailedMessagesAndResetsThemToPending() = runBlocking {
         whenever(filterRuleRepository.shouldAccept(any(), any(), anyOrNull(), any())).thenReturn(true)
         val failedId = messageDao.insert(

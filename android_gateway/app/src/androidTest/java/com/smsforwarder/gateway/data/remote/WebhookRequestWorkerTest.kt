@@ -10,10 +10,13 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import com.smsforwarder.gateway.data.local.GatewayConfigStore
+import com.smsforwarder.gateway.data.local.db.DeliveryLogDao
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.GatewayDatabase
 import com.smsforwarder.gateway.data.local.db.MessageDao
 import com.smsforwarder.gateway.data.local.db.MessageEntity
+import com.smsforwarder.gateway.sms.DeliveryResultNotifier
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -21,10 +24,13 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 /**
@@ -39,7 +45,9 @@ class WebhookRequestWorkerTest {
     private lateinit var server: MockWebServer
     private lateinit var database: GatewayDatabase
     private lateinit var dao: MessageDao
+    private lateinit var deliveryLogDao: DeliveryLogDao
     private lateinit var configStore: GatewayConfigStore
+    private lateinit var deliveryResultNotifier: DeliveryResultNotifier
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
     @Before
@@ -49,7 +57,9 @@ class WebhookRequestWorkerTest {
             .allowMainThreadQueries()
             .build()
         dao = database.messageDao()
+        deliveryLogDao = database.deliveryLogDao()
         configStore = mock()
+        deliveryResultNotifier = mock()
         whenever(configStore.webhookUrl()).thenReturn(server.url("/webhook?upload_token=tok").toString())
         whenever(configStore.retryMaxAttempts()).thenReturn(10)
     }
@@ -88,6 +98,8 @@ class WebhookRequestWorkerTest {
                     workerParameters,
                     configStore,
                     dao,
+                    deliveryLogDao,
+                    deliveryResultNotifier,
                     OkHttpClient(),
                     Json { ignoreUnknownKeys = true },
                 )
@@ -149,5 +161,46 @@ class WebhookRequestWorkerTest {
 
         assertEquals(Result.retry(), result)
         assertEquals(DeliveryStatus.PENDING, dao.getById(messageId)!!.deliveryStatus)
+    }
+
+    @Test
+    fun successWritesDeliveryLogEntryAndDoesNotNotifyOnFirstAttempt() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(201))
+        val messageId = insertMessage()
+
+        buildWorker(messageId, runAttemptCount = 1).doWork()
+
+        val entries = deliveryLogDao.observeRecent().first()
+        assertEquals(1, entries.size)
+        assertTrue(entries[0].success)
+        assertEquals(null, entries[0].errorMessage)
+        verify(deliveryResultNotifier, never()).notifyDeliverySucceededAfterRetry(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+        verify(deliveryResultNotifier, never()).notifyDeliveryFailed(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+    }
+
+    @Test
+    fun successAfterRetryNotifiesAndFinalFailureNotifiesSeparately() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(201))
+        val messageId = insertMessage()
+
+        buildWorker(messageId, runAttemptCount = 2).doWork()
+
+        verify(deliveryResultNotifier).notifyDeliverySucceededAfterRetry("+15551234", 2)
+        verify(deliveryResultNotifier, never()).notifyDeliveryFailed(org.mockito.kotlin.any(), org.mockito.kotlin.any())
+    }
+
+    @Test
+    fun finalFailureWritesLogEntryWithHttpCodeAndNotifies() = runBlocking {
+        whenever(configStore.retryMaxAttempts()).thenReturn(2)
+        server.enqueue(MockResponse().setResponseCode(500))
+        val messageId = insertMessage()
+
+        buildWorker(messageId, runAttemptCount = 2).doWork()
+
+        val entries = deliveryLogDao.observeRecent().first()
+        assertEquals(1, entries.size)
+        assertTrue(!entries[0].success)
+        assertEquals("HTTP 500", entries[0].errorMessage)
+        verify(deliveryResultNotifier).notifyDeliveryFailed("+15551234", 2)
     }
 }

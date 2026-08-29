@@ -6,13 +6,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [MessageEntity::class, ConversationMetaEntity::class, FilterRuleEntity::class],
-    version = 4,
+    entities = [MessageEntity::class, ConversationMetaEntity::class, FilterRuleEntity::class, DeliveryLogEntity::class],
+    version = 5,
     exportSchema = true,
 )
 abstract class GatewayDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun filterRuleDao(): FilterRuleDao
+    abstract fun deliveryLogDao(): DeliveryLogDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -43,6 +44,23 @@ abstract class GatewayDatabase : RoomDatabase() {
                         contentIsRegex INTEGER NOT NULL,
                         enabled INTEGER NOT NULL,
                         sortOrder INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS delivery_log (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        sender TEXT NOT NULL,
+                        attemptNumber INTEGER NOT NULL,
+                        timestamp INTEGER NOT NULL,
+                        success INTEGER NOT NULL,
+                        errorMessage TEXT
                     )
                     """.trimIndent()
                 )

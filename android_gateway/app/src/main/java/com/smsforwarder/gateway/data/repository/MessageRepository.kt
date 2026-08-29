@@ -84,8 +84,15 @@ open class MessageRepository @Inject constructor(
      * explicitly overriding a NOT_FORWARDED filter block for this one
      * message - the filter decision from storeAndForward isn't re-checked
      * here, an explicit user action always wins).
+     *
+     * No-ops while forwarding is paused - resetting the status to PENDING
+     * before enqueueDelivery's own pause check would otherwise leave the
+     * message looking "in progress" (and, for retryAllFailed, silently drop
+     * it from observeFailedCount()) while no WorkManager job was actually
+     * created, with no signal to the user that the tap did nothing.
      */
     open suspend fun retryMessage(messageId: Long) {
+        if (configStore.isForwardingPaused()) return
         val message = messageDao.getById(messageId) ?: return
         messageDao.update(message.copy(deliveryStatus = DeliveryStatus.PENDING))
         enqueueDelivery(messageId)
@@ -99,8 +106,11 @@ open class MessageRepository @Inject constructor(
      * no longer counted by observeFailedCount() - otherwise the resend
      * button would stay visible and a second tap could enqueue duplicate
      * WorkManager jobs for the same messages before the first round finishes.
+     *
+     * No-ops while forwarding is paused - see retryMessage's doc.
      */
     open suspend fun retryAllFailed() {
+        if (configStore.isForwardingPaused()) return
         messageDao.getFailed().forEach { message ->
             messageDao.update(message.copy(deliveryStatus = DeliveryStatus.PENDING))
             enqueueDelivery(message.id)
@@ -157,6 +167,10 @@ open class MessageRepository @Inject constructor(
     }
 
     private fun enqueueDelivery(messageId: Long) {
+        // Message stays in whatever status the caller already set (PENDING for a
+        // new incoming SMS, unchanged for a manual/bulk retry) - pausing only
+        // withholds the WorkManager job, it doesn't touch stored data.
+        if (configStore.isForwardingPaused()) return
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()

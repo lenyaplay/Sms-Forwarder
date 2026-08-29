@@ -46,4 +46,15 @@ class GatewayConfigStoreTest {
         store.setRetryBackoffPolicy(BackoffPolicy.LINEAR)
         assertEquals(BackoffPolicy.LINEAR, store.retryBackoffPolicy())
     }
+
+    @Test
+    fun forwardingPausedDefaultsToFalse() {
+        assertEquals(false, store.isForwardingPaused())
+    }
+
+    @Test
+    fun forwardingPausedRoundTrips() {
+        store.setForwardingPaused(true)
+        assertEquals(true, store.isForwardingPaused())
+    }
 }

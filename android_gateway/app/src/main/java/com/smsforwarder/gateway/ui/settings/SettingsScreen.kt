@@ -16,15 +16,28 @@ import androidx.compose.ui.unit.dp
 object SettingsTestTags {
     const val OPEN_DELIVERY_BUTTON = "settings_open_delivery_button"
     const val OPEN_FILTER_RULES_BUTTON = "settings_open_filter_rules_button"
+    const val OPEN_DELIVERY_LOG_BUTTON = "settings_open_delivery_log_button"
 }
 
 @Composable
-fun SettingsScreen(onOpenDelivery: () -> Unit = {}, onOpenFilterRules: () -> Unit = {}) {
-    SettingsContent(onOpenDelivery = onOpenDelivery, onOpenFilterRules = onOpenFilterRules)
+fun SettingsScreen(
+    onOpenDelivery: () -> Unit = {},
+    onOpenFilterRules: () -> Unit = {},
+    onOpenDeliveryLog: () -> Unit = {},
+) {
+    SettingsContent(
+        onOpenDelivery = onOpenDelivery,
+        onOpenFilterRules = onOpenFilterRules,
+        onOpenDeliveryLog = onOpenDeliveryLog,
+    )
 }
 
 @Composable
-fun SettingsContent(onOpenDelivery: () -> Unit = {}, onOpenFilterRules: () -> Unit = {}) {
+fun SettingsContent(
+    onOpenDelivery: () -> Unit = {},
+    onOpenFilterRules: () -> Unit = {},
+    onOpenDeliveryLog: () -> Unit = {},
+) {
     Scaffold { padding ->
         Card(
             modifier = Modifier
@@ -49,6 +62,12 @@ fun SettingsContent(onOpenDelivery: () -> Unit = {}, onOpenFilterRules: () -> Un
                     modifier = Modifier.testTag(SettingsTestTags.OPEN_FILTER_RULES_BUTTON),
                 ) {
                     Text("Фильтрация SMS")
+                }
+                TextButton(
+                    onClick = onOpenDeliveryLog,
+                    modifier = Modifier.testTag(SettingsTestTags.OPEN_DELIVERY_LOG_BUTTON),
+                ) {
+                    Text("Лог доставки")
                 }
             }
         }

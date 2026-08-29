@@ -35,4 +35,16 @@ class SettingsScreenTest {
 
         assertTrue(opened)
     }
+
+    @Test
+    fun openDeliveryLogButtonInvokesCallback() {
+        var opened = false
+        composeRule.setContent {
+            SettingsScreen(onOpenDelivery = {}, onOpenFilterRules = {}, onOpenDeliveryLog = { opened = true })
+        }
+
+        composeRule.onNodeWithTag(SettingsTestTags.OPEN_DELIVERY_LOG_BUTTON).performClick()
+
+        assertTrue(opened)
+    }
 }

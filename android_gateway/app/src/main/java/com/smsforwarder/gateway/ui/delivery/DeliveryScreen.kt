@@ -16,6 +16,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -30,6 +31,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.work.BackoffPolicy
+import com.smsforwarder.gateway.data.remote.TestConnectionResult
 
 object DeliveryTestTags {
     const val SERVER_URL_FIELD = "delivery_server_url_field"
@@ -41,6 +43,9 @@ object DeliveryTestTags {
     const val BASE_INTERVAL_ERROR = "delivery_base_interval_error"
     const val BACKOFF_EXPONENTIAL = "delivery_backoff_exponential"
     const val BACKOFF_LINEAR = "delivery_backoff_linear"
+    const val FORWARDING_PAUSED_SWITCH = "delivery_forwarding_paused_switch"
+    const val TEST_CONNECTION_BUTTON = "delivery_test_connection_button"
+    const val TEST_CONNECTION_RESULT = "delivery_test_connection_result"
     const val SAVE_BUTTON = "delivery_save_button"
     const val SAVED_CONFIRMATION = "delivery_saved_confirmation"
 }
@@ -146,6 +151,39 @@ fun DeliveryContent(uiState: DeliveryUiState, actions: DeliveryActions, onBack: 
                     shape = MaterialTheme.shapes.small,
                     modifier = Modifier.testTag(DeliveryTestTags.BACKOFF_LINEAR),
                 ) { Text("Фиксированно") }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Пауза форвардинга", style = MaterialTheme.typography.titleSmall)
+                Switch(
+                    checked = uiState.forwardingPaused,
+                    onCheckedChange = actions::onForwardingPausedChange,
+                    modifier = Modifier.testTag(DeliveryTestTags.FORWARDING_PAUSED_SWITCH),
+                )
+            }
+
+            TextButton(
+                onClick = actions::onTestConnection,
+                enabled = uiState.canSave && !uiState.isTestingConnection,
+                modifier = Modifier.padding(top = 12.dp).testTag(DeliveryTestTags.TEST_CONNECTION_BUTTON),
+            ) {
+                Text(if (uiState.isTestingConnection) "Проверка..." else "Проверить соединение")
+            }
+            when (val result = uiState.testConnectionResult) {
+                is TestConnectionResult.Success -> Text(
+                    text = "Успешно (HTTP ${result.httpCode})",
+                    modifier = Modifier.testTag(DeliveryTestTags.TEST_CONNECTION_RESULT),
+                )
+                is TestConnectionResult.Failure -> Text(
+                    text = "Ошибка: ${result.reason}",
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag(DeliveryTestTags.TEST_CONNECTION_RESULT),
+                )
+                null -> Unit
             }
 
             Button(

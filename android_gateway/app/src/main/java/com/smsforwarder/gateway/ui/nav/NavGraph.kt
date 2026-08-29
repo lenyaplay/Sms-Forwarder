@@ -24,6 +24,7 @@ import androidx.navigation.navArgument
 import com.smsforwarder.gateway.data.local.db.FilterStage
 import com.smsforwarder.gateway.ui.conversations.ConversationsScreen
 import com.smsforwarder.gateway.ui.delivery.DeliveryScreen
+import com.smsforwarder.gateway.ui.deliverylog.DeliveryLogScreen
 import com.smsforwarder.gateway.ui.filters.FilterRuleEditScreen
 import com.smsforwarder.gateway.ui.filters.FilterRulesScreen
 import com.smsforwarder.gateway.ui.settings.SettingsScreen
@@ -33,6 +34,7 @@ private object Routes {
     const val CONVERSATIONS = "conversations"
     const val SETTINGS = "settings"
     const val DELIVERY = "delivery"
+    const val DELIVERY_LOG = "delivery_log"
     const val THREAD = "thread/{sender}"
     const val FILTER_RULES = "filter_rules"
     const val FILTER_RULE_EDIT = "filter_rules/edit/{stage}?id={id}"
@@ -79,10 +81,14 @@ fun GatewayNavGraph(openSender: String? = null) {
                 SettingsScreen(
                     onOpenDelivery = { navController.navigate(Routes.DELIVERY) },
                     onOpenFilterRules = { navController.navigate(Routes.FILTER_RULES) },
+                    onOpenDeliveryLog = { navController.navigate(Routes.DELIVERY_LOG) },
                 )
             }
             composable(Routes.DELIVERY) {
                 DeliveryScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.DELIVERY_LOG) {
+                DeliveryLogScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 Routes.THREAD,

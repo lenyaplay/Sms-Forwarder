@@ -10,6 +10,7 @@ import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.GatewayDatabase
 import com.smsforwarder.gateway.data.local.db.MessageEntity
 import com.smsforwarder.gateway.data.remote.WebhookRequestWorker
+import com.smsforwarder.gateway.sms.DeliveryResultNotifier
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
@@ -64,7 +65,16 @@ class RealBackendWebhookDeliveryTest {
                     appContext: android.content.Context,
                     workerClassName: String,
                     workerParameters: WorkerParameters,
-                ) = WebhookRequestWorker(appContext, workerParameters, configStore, dao, OkHttpClient(), Json { ignoreUnknownKeys = true })
+                ) = WebhookRequestWorker(
+                    appContext,
+                    workerParameters,
+                    configStore,
+                    dao,
+                    database.deliveryLogDao(),
+                    mock<DeliveryResultNotifier>(),
+                    OkHttpClient(),
+                    Json { ignoreUnknownKeys = true },
+                )
             })
             .build()
 

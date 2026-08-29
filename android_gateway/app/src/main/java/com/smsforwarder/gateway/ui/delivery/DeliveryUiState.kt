@@ -1,6 +1,7 @@
 package com.smsforwarder.gateway.ui.delivery
 
 import androidx.work.BackoffPolicy
+import com.smsforwarder.gateway.data.remote.TestConnectionResult
 
 data class DeliveryUiState(
     val serverUrl: String = "",
@@ -8,7 +9,10 @@ data class DeliveryUiState(
     val maxAttempts: String = "",
     val baseIntervalSeconds: String = "",
     val backoffPolicy: BackoffPolicy = BackoffPolicy.EXPONENTIAL,
+    val forwardingPaused: Boolean = false,
     val isSaved: Boolean = false,
+    val isTestingConnection: Boolean = false,
+    val testConnectionResult: TestConnectionResult? = null,
 ) {
     val maxAttemptsError: String?
         get() {

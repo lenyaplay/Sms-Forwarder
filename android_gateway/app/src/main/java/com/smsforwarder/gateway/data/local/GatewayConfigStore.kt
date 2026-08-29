@@ -94,6 +94,13 @@ open class GatewayConfigStore(context: Context) {
         prefs.edit().putString(KEY_RETRY_BACKOFF_POLICY, value.name).apply()
     }
 
+    /** Default false so an app update doesn't silently stop forwarding for existing users. */
+    open fun isForwardingPaused(): Boolean = prefs.getBoolean(KEY_FORWARDING_PAUSED, false)
+
+    open fun setForwardingPaused(value: Boolean) {
+        prefs.edit().putBoolean(KEY_FORWARDING_PAUSED, value).apply()
+    }
+
     private companion object {
         const val PREFS_NAME = "sms_forwarder_gateway_config"
         const val KEY_SERVER_URL = "server_url"
@@ -105,5 +112,6 @@ open class GatewayConfigStore(context: Context) {
         const val KEY_RETRY_MAX_ATTEMPTS = "retry_max_attempts"
         const val KEY_RETRY_BASE_INTERVAL_SECONDS = "retry_base_interval_seconds"
         const val KEY_RETRY_BACKOFF_POLICY = "retry_backoff_policy"
+        const val KEY_FORWARDING_PAUSED = "forwarding_paused"
     }
 }

@@ -6,8 +6,11 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.smsforwarder.gateway.data.local.GatewayConfigStore
+import com.smsforwarder.gateway.data.local.db.DeliveryLogDao
+import com.smsforwarder.gateway.data.local.db.DeliveryLogEntity
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.MessageDao
+import com.smsforwarder.gateway.sms.DeliveryResultNotifier
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +35,8 @@ class WebhookRequestWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val configStore: GatewayConfigStore,
     private val messageDao: MessageDao,
+    private val deliveryLogDao: DeliveryLogDao,
+    private val deliveryResultNotifier: DeliveryResultNotifier,
     private val okHttpClient: OkHttpClient,
     private val json: Json,
 ) : CoroutineWorker(context, params) {
@@ -58,18 +63,35 @@ class WebhookRequestWorker @AssistedInject constructor(
             .toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder().url(webhookUrl).post(body).build()
 
-        val success = try {
-            okHttpClient.newCall(request).execute().use { it.isSuccessful }
+        val errorMessage: String? = try {
+            okHttpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) null else "HTTP ${response.code}"
+            }
         } catch (e: IOException) {
             Log.w("WebhookRequestWorker", "delivery attempt failed", e)
-            false
+            e.message ?: "Сетевая ошибка"
         }
+        val success = errorMessage == null
+
+        deliveryLogDao.insert(
+            DeliveryLogEntity(
+                sender = message.sender,
+                attemptNumber = runAttemptCount,
+                timestamp = System.currentTimeMillis(),
+                success = success,
+                errorMessage = errorMessage,
+            )
+        )
 
         if (success) {
             messageDao.update(message.copy(deliveryStatus = DeliveryStatus.SENT))
+            if (runAttemptCount > 1) {
+                deliveryResultNotifier.notifyDeliverySucceededAfterRetry(message.sender, runAttemptCount)
+            }
             Result.success()
         } else if (runAttemptCount >= maxAttempts) {
             messageDao.update(message.copy(deliveryStatus = DeliveryStatus.FAILED))
+            deliveryResultNotifier.notifyDeliveryFailed(message.sender, runAttemptCount)
             Result.failure()
         } else {
             Result.retry()
