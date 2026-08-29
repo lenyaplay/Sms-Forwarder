@@ -21,7 +21,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.smsforwarder.gateway.data.local.db.FilterStage
 import com.smsforwarder.gateway.ui.conversations.ConversationsScreen
+import com.smsforwarder.gateway.ui.filters.FilterRuleEditScreen
+import com.smsforwarder.gateway.ui.filters.FilterRulesScreen
 import com.smsforwarder.gateway.ui.settings.SettingsScreen
 import com.smsforwarder.gateway.ui.thread.ThreadScreen
 
@@ -29,7 +32,10 @@ private object Routes {
     const val CONVERSATIONS = "conversations"
     const val SETTINGS = "settings"
     const val THREAD = "thread/{sender}"
+    const val FILTER_RULES = "filter_rules"
+    const val FILTER_RULE_EDIT = "filter_rules/edit/{stage}?id={id}"
     fun thread(sender: String) = "thread/$sender"
+    fun filterRuleEdit(stage: FilterStage, id: Long?) = "filter_rules/edit/${stage.name}?id=${id ?: 0}"
 }
 
 @Composable
@@ -67,11 +73,27 @@ fun GatewayNavGraph(openSender: String? = null) {
             composable(Routes.CONVERSATIONS) {
                 ConversationsScreen(onOpenThread = { sender -> navController.navigate(Routes.thread(sender)) })
             }
-            composable(Routes.SETTINGS) { SettingsScreen() }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(onOpenFilterRules = { navController.navigate(Routes.FILTER_RULES) })
+            }
             composable(
                 Routes.THREAD,
                 arguments = listOf(navArgument("sender") { type = NavType.StringType }),
             ) { ThreadScreen(onBack = { navController.popBackStack() }) }
+            composable(Routes.FILTER_RULES) {
+                FilterRulesScreen(
+                    onBack = { navController.popBackStack() },
+                    onAddRule = { stage -> navController.navigate(Routes.filterRuleEdit(stage, null)) },
+                    onEditRule = { id, stage -> navController.navigate(Routes.filterRuleEdit(stage, id)) },
+                )
+            }
+            composable(
+                Routes.FILTER_RULE_EDIT,
+                arguments = listOf(
+                    navArgument("stage") { type = NavType.StringType },
+                    navArgument("id") { type = NavType.StringType; defaultValue = "0" },
+                ),
+            ) { FilterRuleEditScreen(onBack = { navController.popBackStack() }) }
         }
     }
 }

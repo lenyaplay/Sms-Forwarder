@@ -27,7 +27,9 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE id = :id")
     suspend fun getById(id: Long): MessageEntity?
 
-    @Query("SELECT * FROM messages WHERE deliveryStatus != 'SENT'")
+    // NOT_FORWARDED excluded deliberately - a forwarding-stage filter block is a
+    // decision, not a delivery failure, so it must not get swept up automatically.
+    @Query("SELECT * FROM messages WHERE deliveryStatus NOT IN ('SENT', 'NOT_FORWARDED')")
     suspend fun getUndelivered(): List<MessageEntity>
 
     @Query("SELECT * FROM messages ORDER BY createdAt DESC")

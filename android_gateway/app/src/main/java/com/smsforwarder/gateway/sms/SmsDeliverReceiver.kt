@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
 import android.util.Log
+import com.smsforwarder.gateway.data.local.SimOptionsProvider
+import com.smsforwarder.gateway.data.local.db.FilterStage
+import com.smsforwarder.gateway.data.repository.FilterRuleRepository
 import com.smsforwarder.gateway.data.repository.MessageRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +26,8 @@ class SmsDeliverReceiver : BroadcastReceiver() {
 
     @Inject lateinit var messageRepository: MessageRepository
     @Inject lateinit var notifier: IncomingSmsNotifier
+    @Inject lateinit var filterRuleRepository: FilterRuleRepository
+    @Inject lateinit var simOptionsProvider: SimOptionsProvider
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -47,7 +52,13 @@ class SmsDeliverReceiver : BroadcastReceiver() {
                 // point, so an uncaught exception wouldn't retry the delivery,
                 // it would just take down the app for what should be a
                 // logged, recoverable failure.
-                messageRepository.storeAndForward(sender, text, sentStamp, receivedStamp, simSlot)
+                val subscriptionId = simOptionsProvider.subscriptionIdForSlot(simSlot)
+                // Reception-stage block: the message is dropped entirely - not
+                // stored, not notified - per spec 0015 ("как будто не приходило").
+                if (!filterRuleRepository.shouldAccept(FilterStage.RECEPTION, sender, subscriptionId, text)) {
+                    return@launch
+                }
+                messageRepository.storeAndForward(sender, text, sentStamp, receivedStamp, simSlot, subscriptionId)
                 notifier.notifyIncoming(sender, text)
             } catch (e: Exception) {
                 Log.e("SmsDeliverReceiver", "failed to store/forward incoming SMS", e)

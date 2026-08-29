@@ -3,7 +3,7 @@ package com.smsforwarder.gateway.data.local.db
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-enum class DeliveryStatus { PENDING, SENT, FAILED }
+enum class DeliveryStatus { PENDING, SENT, FAILED, NOT_FORWARDED }
 
 enum class MessageDirection { IN, OUT }
 

@@ -10,6 +10,7 @@ import androidx.work.WorkManager
 import com.smsforwarder.gateway.data.local.db.ConversationEntity
 import com.smsforwarder.gateway.data.local.db.ConversationMetaEntity
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
+import com.smsforwarder.gateway.data.local.db.FilterStage
 import com.smsforwarder.gateway.data.local.db.MessageDao
 import com.smsforwarder.gateway.data.local.db.MessageDirection
 import com.smsforwarder.gateway.data.local.db.MessageEntity
@@ -27,6 +28,7 @@ import javax.inject.Singleton
 open class MessageRepository @Inject constructor(
     private val messageDao: MessageDao,
     private val outgoingSmsSender: OutgoingSmsSender,
+    private val filterRuleRepository: FilterRuleRepository,
     @ApplicationContext private val context: Context,
 ) {
     open fun observeMessages(): Flow<List<MessageEntity>> = messageDao.observeAll()
@@ -65,12 +67,21 @@ open class MessageRepository @Inject constructor(
      * after the user saves server URL/upload_token in Settings, so a message
      * that arrived before configuration isn't silently lost forever once the
      * worker that received it already terminated with Result.failure().
+     *
+     * NOT_FORWARDED messages are untouched by this - a forwarding-stage
+     * filter block is a deliberate decision, not a delivery failure, so it
+     * doesn't get swept up in this "retry everything undelivered" pass.
      */
     open suspend fun retryUndeliveredMessages() {
         messageDao.getUndelivered().forEach { enqueueDelivery(it.id) }
     }
 
-    /** Manual retry for one FAILED message (e.g. exhausted retries for a reason other than missing config). */
+    /**
+     * Manual retry for one message (e.g. exhausted retries, or a user
+     * explicitly overriding a NOT_FORWARDED filter block for this one
+     * message - the filter decision from storeAndForward isn't re-checked
+     * here, an explicit user action always wins).
+     */
     open suspend fun retryMessage(messageId: Long) {
         val message = messageDao.getById(messageId) ?: return
         messageDao.update(message.copy(deliveryStatus = DeliveryStatus.PENDING))
@@ -98,14 +109,20 @@ open class MessageRepository @Inject constructor(
         )
     }
 
-    /** Persists an incoming SMS and enqueues its webhook delivery. */
+    /**
+     * Persists an incoming SMS and enqueues its webhook delivery, unless the
+     * forwarding-stage filter blocks it - in which case the message is still
+     * stored/visible (NOT_FORWARDED), just never enqueued (spec 0015).
+     */
     open suspend fun storeAndForward(
         sender: String,
         text: String,
         sentStamp: Long?,
         receivedStamp: Long,
         simSlot: Int?,
+        subscriptionId: Int? = null,
     ) {
+        val shouldForward = filterRuleRepository.shouldAccept(FilterStage.FORWARDING, sender, subscriptionId, text)
         val id = messageDao.insert(
             MessageEntity(
                 sender = sender,
@@ -113,11 +130,11 @@ open class MessageRepository @Inject constructor(
                 sentStamp = sentStamp,
                 receivedStamp = receivedStamp,
                 simSlot = simSlot,
-                deliveryStatus = DeliveryStatus.PENDING,
+                deliveryStatus = if (shouldForward) DeliveryStatus.PENDING else DeliveryStatus.NOT_FORWARDED,
                 createdAt = System.currentTimeMillis(),
             )
         )
-        enqueueDelivery(id)
+        if (shouldForward) enqueueDelivery(id)
     }
 
     private fun enqueueDelivery(messageId: Long) {

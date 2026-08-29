@@ -36,4 +36,8 @@ open class SimOptionsProvider @Inject constructor(
             )
         }.orEmpty()
     }
+
+    /** Maps a reception-time slot index (SimSlotResolver) to the subscriptionId filter rules key on. Null if the slot isn't among the currently active SIMs. */
+    open fun subscriptionIdForSlot(slotIndex: Int?): Int? =
+        activeSims().find { it.slotIndex == slotIndex }?.subscriptionId
 }

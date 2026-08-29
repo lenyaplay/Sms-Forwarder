@@ -2,6 +2,8 @@ package com.smsforwarder.gateway.data.local
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.smsforwarder.gateway.data.local.db.FilterMode
+import com.smsforwarder.gateway.data.local.db.FilterStage
 import com.smsforwarder.gateway.data.remote.WebhookUrlBuilder
 
 /**
@@ -53,11 +55,29 @@ open class GatewayConfigStore(context: Context) {
         prefs.edit().putLong(KEY_LAST_SYNCED_SMS_ROW_ID, rowId).apply()
     }
 
+    /** BLACKLIST by default so an app update never silently cuts off forwarding for existing users. */
+    open fun filterMode(stage: FilterStage): FilterMode {
+        val key = filterModeKey(stage)
+        val stored = prefs.getString(key, null) ?: return FilterMode.BLACKLIST
+        return runCatching { FilterMode.valueOf(stored) }.getOrDefault(FilterMode.BLACKLIST)
+    }
+
+    open fun setFilterMode(stage: FilterStage, mode: FilterMode) {
+        prefs.edit().putString(filterModeKey(stage), mode.name).apply()
+    }
+
+    private fun filterModeKey(stage: FilterStage): String = when (stage) {
+        FilterStage.RECEPTION -> KEY_RECEPTION_FILTER_MODE
+        FilterStage.FORWARDING -> KEY_FORWARDING_FILTER_MODE
+    }
+
     private companion object {
         const val PREFS_NAME = "sms_forwarder_gateway_config"
         const val KEY_SERVER_URL = "server_url"
         const val KEY_UPLOAD_TOKEN = "upload_token"
         const val KEY_HISTORY_IMPORTED = "history_imported"
         const val KEY_LAST_SYNCED_SMS_ROW_ID = "last_synced_sms_row_id"
+        const val KEY_RECEPTION_FILTER_MODE = "reception_filter_mode"
+        const val KEY_FORWARDING_FILTER_MODE = "forwarding_filter_mode"
     }
 }

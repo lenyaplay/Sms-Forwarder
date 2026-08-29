@@ -28,16 +28,17 @@ object SettingsTestTags {
     const val SAVE_BUTTON = "settings_save_button"
     const val SAVED_CONFIRMATION = "settings_saved_confirmation"
     const val COPY_TOKEN_BUTTON = "settings_copy_token_button"
+    const val OPEN_FILTER_RULES_BUTTON = "settings_open_filter_rules_button"
 }
 
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel(), onOpenFilterRules: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsState()
-    SettingsContent(uiState = uiState, actions = viewModel)
+    SettingsContent(uiState = uiState, actions = viewModel, onOpenFilterRules = onOpenFilterRules)
 }
 
 @Composable
-fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions) {
+fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions, onOpenFilterRules: () -> Unit = {}) {
     val clipboardManager = LocalClipboardManager.current
     Scaffold { padding ->
         Card(
@@ -99,6 +100,13 @@ fun SettingsContent(uiState: SettingsUiState, actions: SettingsActions) {
                 }
                 if (uiState.isSaved) {
                     Text("Сохранено", modifier = Modifier.testTag(SettingsTestTags.SAVED_CONFIRMATION))
+                }
+
+                TextButton(
+                    onClick = onOpenFilterRules,
+                    modifier = Modifier.padding(top = 12.dp).testTag(SettingsTestTags.OPEN_FILTER_RULES_BUTTON),
+                ) {
+                    Text("Фильтрация SMS")
                 }
             }
         }
