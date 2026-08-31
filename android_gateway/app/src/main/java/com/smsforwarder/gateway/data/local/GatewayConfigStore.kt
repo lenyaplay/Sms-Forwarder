@@ -101,6 +101,18 @@ open class GatewayConfigStore(context: Context) {
         prefs.edit().putBoolean(KEY_FORWARDING_PAUSED, value).apply()
     }
 
+    /** Point removals, not .clear() - this prefs file also holds filter modes and import bookkeeping, which must survive a delivery reset untouched. */
+    open fun resetDeliverySettings() {
+        prefs.edit()
+            .remove(KEY_SERVER_URL)
+            .remove(KEY_UPLOAD_TOKEN)
+            .remove(KEY_RETRY_MAX_ATTEMPTS)
+            .remove(KEY_RETRY_BASE_INTERVAL_SECONDS)
+            .remove(KEY_RETRY_BACKOFF_POLICY)
+            .remove(KEY_FORWARDING_PAUSED)
+            .apply()
+    }
+
     private companion object {
         const val PREFS_NAME = "sms_forwarder_gateway_config"
         const val KEY_SERVER_URL = "server_url"

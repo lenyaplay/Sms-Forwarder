@@ -24,6 +24,7 @@ interface DeliveryActions {
     fun onForwardingPausedChange(value: Boolean)
     fun onSave()
     fun onTestConnection()
+    fun onResetDeliverySettings()
 }
 
 @HiltViewModel
@@ -33,17 +34,17 @@ class DeliveryViewModel @Inject constructor(
     private val connectionTester: WebhookConnectionTester,
 ) : ViewModel(), DeliveryActions {
 
-    private val _uiState = MutableStateFlow(
-        DeliveryUiState(
-            serverUrl = configStore.getServerUrl().orEmpty(),
-            uploadToken = configStore.getUploadToken().orEmpty(),
-            maxAttempts = configStore.retryMaxAttempts().toString(),
-            baseIntervalSeconds = configStore.retryBaseIntervalSeconds().toString(),
-            backoffPolicy = configStore.retryBackoffPolicy(),
-            forwardingPaused = configStore.isForwardingPaused(),
-        )
-    )
+    private val _uiState = MutableStateFlow(stateFromStore())
     val uiState: StateFlow<DeliveryUiState> = _uiState.asStateFlow()
+
+    private fun stateFromStore() = DeliveryUiState(
+        serverUrl = configStore.getServerUrl().orEmpty(),
+        uploadToken = configStore.getUploadToken().orEmpty(),
+        maxAttempts = configStore.retryMaxAttempts().toString(),
+        baseIntervalSeconds = configStore.retryBaseIntervalSeconds().toString(),
+        backoffPolicy = configStore.retryBackoffPolicy(),
+        forwardingPaused = configStore.isForwardingPaused(),
+    )
 
     override fun onServerUrlChange(value: String) {
         _uiState.update { it.copy(serverUrl = value, isSaved = false, testConnectionResult = null) }
@@ -83,6 +84,11 @@ class DeliveryViewModel @Inject constructor(
             messageRepository.retryUndeliveredMessages()
             _uiState.update { it.copy(isSaved = true) }
         }
+    }
+
+    override fun onResetDeliverySettings() {
+        configStore.resetDeliverySettings()
+        _uiState.update { stateFromStore() }
     }
 
     override fun onTestConnection() {

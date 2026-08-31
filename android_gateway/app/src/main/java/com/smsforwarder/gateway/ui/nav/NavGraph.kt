@@ -21,6 +21,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.smsforwarder.gateway.OpenSenderRequest
 import com.smsforwarder.gateway.data.local.db.FilterStage
 import com.smsforwarder.gateway.ui.conversations.ConversationsScreen
 import com.smsforwarder.gateway.ui.delivery.DeliveryScreen
@@ -43,10 +44,10 @@ private object Routes {
 }
 
 @Composable
-fun GatewayNavGraph(openSender: String? = null) {
+fun GatewayNavGraph(openSender: OpenSenderRequest? = null) {
     val navController = rememberNavController()
     LaunchedEffect(openSender) {
-        if (openSender != null) navController.navigate(Routes.thread(openSender))
+        if (openSender != null) navController.navigate(Routes.thread(openSender.sender))
     }
     Scaffold(
         bottomBar = {

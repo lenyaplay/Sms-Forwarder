@@ -4,7 +4,10 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.BackoffPolicy
+import com.smsforwarder.gateway.data.local.db.FilterMode
+import com.smsforwarder.gateway.data.local.db.FilterStage
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,5 +59,32 @@ class GatewayConfigStoreTest {
     fun forwardingPausedRoundTrips() {
         store.setForwardingPaused(true)
         assertEquals(true, store.isForwardingPaused())
+    }
+
+    @Test
+    fun resetDeliverySettingsClearsOnlyDeliveryKeysNotFilterOrImportKeys() {
+        store.save("https://example.com", "tok-123")
+        store.setRetryMaxAttempts(5)
+        store.setRetryBaseIntervalSeconds(120L)
+        store.setRetryBackoffPolicy(BackoffPolicy.LINEAR)
+        store.setForwardingPaused(true)
+        store.setFilterMode(FilterStage.RECEPTION, FilterMode.WHITELIST)
+        store.setFilterMode(FilterStage.FORWARDING, FilterMode.WHITELIST)
+        store.markHistoryImported()
+        store.setLastSyncedSmsRowId(42L)
+
+        store.resetDeliverySettings()
+
+        assertEquals(null, store.getServerUrl())
+        assertEquals(null, store.getUploadToken())
+        assertEquals(10, store.retryMaxAttempts())
+        assertEquals(30L, store.retryBaseIntervalSeconds())
+        assertEquals(BackoffPolicy.EXPONENTIAL, store.retryBackoffPolicy())
+        assertEquals(false, store.isForwardingPaused())
+
+        assertEquals(FilterMode.WHITELIST, store.filterMode(FilterStage.RECEPTION))
+        assertEquals(FilterMode.WHITELIST, store.filterMode(FilterStage.FORWARDING))
+        assertTrue(store.isHistoryImported())
+        assertEquals(42L, store.lastSyncedSmsRowId())
     }
 }

@@ -44,13 +44,26 @@ class IncomingSmsNotifier @Inject constructor(
             .setSmallIcon(android.R.drawable.sym_action_email)
             .setContentTitle(sender)
             .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setAutoCancel(true)
             .setContentIntent(
                 PendingIntent.getActivity(
                     context,
-                    0,
-                    Intent(context, MainActivity::class.java),
-                    PendingIntent.FLAG_IMMUTABLE,
+                    // requestCode keyed on sender, not a shared 0 - otherwise PendingIntent's
+                    // (context, requestCode, intent) cache key collides across different senders
+                    // and FLAG_UPDATE_CURRENT can return a stale intent with the wrong extra.
+                    sender.hashCode(),
+                    Intent(context, MainActivity::class.java)
+                        .putExtra(MainActivity.EXTRA_OPEN_SENDER, sender)
+                        // Without CLEAR_TOP, tapping while MainActivity is already resumed on
+                        // another screen just reorders the existing task to front
+                        // (ActivityTaskManager START_TASK_TO_FRONT) without ever calling
+                        // onNewIntent - confirmed live on an emulator (logcat showed no
+                        // onNewIntent invocation, screen stayed on the previous thread).
+                        // Matches SendToActivity's existing sms:/mms: deep-link, which needs
+                        // the same flags for the same reason.
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 )
             )
             .build()

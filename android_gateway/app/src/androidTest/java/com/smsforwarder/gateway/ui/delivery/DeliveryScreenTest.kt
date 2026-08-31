@@ -238,4 +238,50 @@ class DeliveryScreenTest {
         }
         composeRule.onNodeWithTag(DeliveryTestTags.TEST_CONNECTION_RESULT).assertExists()
     }
+
+    @Test
+    fun resetButtonShowsConfirmDialogAndCancelDoesNothing() {
+        val store = mockStore("https://example.com", "tok-123")
+        composeRule.setContent {
+            DeliveryScreen(viewModel = DeliveryViewModel(store, mockRepository(), mockConnectionTester()), onBack = {})
+        }
+
+        composeRule.onNodeWithTag(DeliveryTestTags.RESET_BUTTON).performClick()
+        composeRule.onNodeWithText("Сбросить настройки доставки?").assertExists()
+
+        composeRule.onNodeWithTag(com.smsforwarder.gateway.ui.common.ConfirmDialogTestTags.DISMISS_BUTTON).performClick()
+
+        verify(store, org.mockito.kotlin.never()).resetDeliverySettings()
+        composeRule.onNodeWithText("https://example.com").assertExists()
+    }
+
+    @Test
+    fun confirmingResetCallsConfigStoreAndClearsFieldsOnScreen() {
+        // A plain mock's stubbed getters wouldn't change after resetDeliverySettings()
+        // is invoked on it - re-stub them from inside the answer so the screen's
+        // post-reset re-read (stateFromStore()) actually observes cleared values,
+        // exercising DeliveryViewModel's "re-read from the store, don't assume
+        // in-memory cleared state" behavior for real.
+        val store = mockStore("https://example.com", "tok-123")
+        whenever(store.resetDeliverySettings()).thenAnswer {
+            whenever(store.getServerUrl()).thenReturn(null)
+            whenever(store.getUploadToken()).thenReturn(null)
+            whenever(store.retryMaxAttempts()).thenReturn(10)
+            whenever(store.retryBaseIntervalSeconds()).thenReturn(30L)
+            whenever(store.retryBackoffPolicy()).thenReturn(androidx.work.BackoffPolicy.EXPONENTIAL)
+            Unit
+        }
+        composeRule.setContent {
+            DeliveryScreen(viewModel = DeliveryViewModel(store, mockRepository(), mockConnectionTester()), onBack = {})
+        }
+
+        composeRule.onNodeWithTag(DeliveryTestTags.RESET_BUTTON).performClick()
+        composeRule.onNodeWithTag(com.smsforwarder.gateway.ui.common.ConfirmDialogTestTags.CONFIRM_BUTTON).performClick()
+
+        verify(store).resetDeliverySettings()
+        composeRule.onNodeWithText("https://example.com").assertDoesNotExist()
+        composeRule.onNodeWithText("tok-123").assertDoesNotExist()
+        composeRule.onNodeWithText("10").assertExists()
+        composeRule.onNodeWithText("30").assertExists()
+    }
 }

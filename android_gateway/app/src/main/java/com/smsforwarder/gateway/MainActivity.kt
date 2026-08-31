@@ -59,11 +59,18 @@ class MainActivity : ComponentActivity() {
     // FLAG_ACTIVITY_CLEAR_TOP, which Android delivers to an already-running
     // instance via onNewIntent() instead of a fresh onCreate() - without this,
     // the extra would silently be dropped whenever the app is already open.
-    private val openSender = mutableStateOf<String?>(null)
+    //
+    // Paired with a monotonic requestId, not a bare sender String: GatewayNavGraph's
+    // LaunchedEffect(openSender) re-navigates only when its key changes - a second
+    // notification tap for the SAME sender (after the user already navigated away
+    // from that thread) would carry an identical String and silently no-op without
+    // this, since the key wouldn't have changed.
+    private var openSenderRequestCounter = 0
+    private val openSender = mutableStateOf<OpenSenderRequest?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        openSender.value = intent?.getStringExtra(EXTRA_OPEN_SENDER)
+        openSender.value = openSenderRequest(intent?.getStringExtra(EXTRA_OPEN_SENDER))
         setContent {
             SmsForwarderGatewayTheme {
                 MainContent(openSender = openSender.value)
@@ -74,16 +81,21 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        openSender.value = intent.getStringExtra(EXTRA_OPEN_SENDER)
+        openSender.value = openSenderRequest(intent.getStringExtra(EXTRA_OPEN_SENDER))
     }
+
+    private fun openSenderRequest(sender: String?): OpenSenderRequest? =
+        sender?.let { OpenSenderRequest(it, openSenderRequestCounter++) }
 
     companion object {
         const val EXTRA_OPEN_SENDER = "open_sender"
     }
 }
 
+data class OpenSenderRequest(val sender: String, val requestId: Int)
+
 @Composable
-private fun MainContent(openSender: String? = null) {
+private fun MainContent(openSender: OpenSenderRequest? = null) {
     val context = LocalContext.current
     var isDefault by remember { mutableStateOf(isDefaultSmsApp(context)) }
 

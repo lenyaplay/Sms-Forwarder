@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -23,6 +25,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -32,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.work.BackoffPolicy
 import com.smsforwarder.gateway.data.remote.TestConnectionResult
+import com.smsforwarder.gateway.ui.common.ConfirmDialog
 
 object DeliveryTestTags {
     const val SERVER_URL_FIELD = "delivery_server_url_field"
@@ -48,6 +54,7 @@ object DeliveryTestTags {
     const val TEST_CONNECTION_RESULT = "delivery_test_connection_result"
     const val SAVE_BUTTON = "delivery_save_button"
     const val SAVED_CONFIRMATION = "delivery_saved_confirmation"
+    const val RESET_BUTTON = "delivery_reset_button"
 }
 
 @Composable
@@ -60,6 +67,7 @@ fun DeliveryScreen(viewModel: DeliveryViewModel = hiltViewModel(), onBack: () ->
 @Composable
 fun DeliveryContent(uiState: DeliveryUiState, actions: DeliveryActions, onBack: () -> Unit) {
     val clipboardManager = LocalClipboardManager.current
+    var showResetConfirm by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -73,7 +81,11 @@ fun DeliveryContent(uiState: DeliveryUiState, actions: DeliveryActions, onBack: 
         },
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxWidth().padding(padding).padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             OutlinedTextField(
@@ -196,6 +208,26 @@ fun DeliveryContent(uiState: DeliveryUiState, actions: DeliveryActions, onBack: 
             if (uiState.isSaved) {
                 Text("Сохранено", modifier = Modifier.testTag(DeliveryTestTags.SAVED_CONFIRMATION))
             }
+
+            TextButton(
+                onClick = { showResetConfirm = true },
+                modifier = Modifier.padding(top = 24.dp).testTag(DeliveryTestTags.RESET_BUTTON),
+            ) {
+                Text("Сбросить настройки доставки", color = MaterialTheme.colorScheme.error)
+            }
         }
+    }
+
+    if (showResetConfirm) {
+        ConfirmDialog(
+            title = "Сбросить настройки доставки?",
+            text = "Адрес сервера, upload token, настройки повторных попыток и пауза форвардинга будут сброшены. Форвардинг перестанет работать, пока настройки не будут заданы заново. Правила фильтрации и история сообщений не затрагиваются.",
+            confirmLabel = "Сбросить",
+            onConfirm = {
+                actions.onResetDeliverySettings()
+                showResetConfirm = false
+            },
+            onDismiss = { showResetConfirm = false },
+        )
     }
 }
