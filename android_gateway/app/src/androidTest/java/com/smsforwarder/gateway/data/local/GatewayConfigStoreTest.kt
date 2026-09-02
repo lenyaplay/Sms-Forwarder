@@ -109,4 +109,50 @@ class GatewayConfigStoreTest {
         store.setHideContactNameInPayload(false)
         assertEquals(false, store.hideContactNameInPayload())
     }
+
+    @Test
+    fun diagnosticsEnabledDefaultsToFalse() {
+        assertEquals(false, store.isDiagnosticsEnabled())
+    }
+
+    @Test
+    fun diagnosticsEnabledRoundTrips() {
+        store.setDiagnosticsEnabled(true)
+        assertEquals(true, store.isDiagnosticsEnabled())
+    }
+
+    // SharedPreferences dispatches OnSharedPreferenceChangeListener callbacks
+    // asynchronously via a main-thread Handler post, even after apply() has
+    // already returned - so assertions on the callback must poll, not assert
+    // immediately after the triggering write.
+    @Test
+    fun diagnosticsEnabledChangeListenerFiresOnlyForItsOwnKey() {
+        var lastValue: Boolean? = null
+        var callCount = 0
+        val listener = store.addOnDiagnosticsEnabledChangeListener {
+            lastValue = it
+            callCount++
+        }
+        try {
+            store.setForwardingPaused(true) // unrelated key - must not fire
+            Thread.sleep(200)
+            assertEquals(0, callCount)
+
+            store.setDiagnosticsEnabled(true)
+            waitUntil { callCount == 1 }
+            assertEquals(true, lastValue)
+
+            store.setDiagnosticsEnabled(false)
+            waitUntil { callCount == 2 }
+            assertEquals(false, lastValue)
+        } finally {
+            store.removeOnDiagnosticsEnabledChangeListener(listener)
+        }
+    }
+
+    private fun waitUntil(timeoutMs: Long = 2000, condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline && !condition()) Thread.sleep(20)
+        assertTrue(condition())
+    }
 }

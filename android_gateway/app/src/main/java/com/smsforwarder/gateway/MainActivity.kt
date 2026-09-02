@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,9 +44,11 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.smsforwarder.gateway.data.perf.PerfMonitor
 import com.smsforwarder.gateway.ui.nav.GatewayNavGraph
 import com.smsforwarder.gateway.ui.theme.SmsForwarderGatewayTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 object MainActivityTestTags {
     const val REQUEST_DEFAULT_SMS_BUTTON = "request_default_sms_button"
@@ -68,10 +71,15 @@ class MainActivity : ComponentActivity() {
     private var openSenderRequestCounter = 0
     private val openSender = mutableStateOf<OpenSenderRequest?>(null)
 
+    @Inject lateinit var perfMonitor: PerfMonitor
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         openSender.value = openSenderRequest(intent?.getStringExtra(EXTRA_OPEN_SENDER))
         setContent {
+            // attachTo needs a DecorView, which setContent() itself creates -
+            // calling it before setContent() throws (peekDecorView() is null).
+            SideEffect { perfMonitor.attachTo(window) }
             SmsForwarderGatewayTheme {
                 MainContent(openSender = openSender.value)
             }

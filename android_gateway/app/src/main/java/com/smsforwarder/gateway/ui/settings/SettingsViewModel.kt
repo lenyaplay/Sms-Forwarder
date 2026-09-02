@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.smsforwarder.gateway.data.local.GatewayConfigStore
 import com.smsforwarder.gateway.data.local.GatewaySettingsExporter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -20,16 +21,23 @@ interface SettingsActions {
     fun onExportConfirmed(uri: Uri)
     fun onImportConfirmed(uri: Uri)
     fun onMessageDismissed()
+    fun onDiagnosticsEnabledChange(value: Boolean)
 }
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val exporter: GatewaySettingsExporter,
+    private val configStore: GatewayConfigStore,
     @ApplicationContext private val context: Context,
 ) : ViewModel(), SettingsActions {
 
-    private val _uiState = MutableStateFlow(SettingsUiState())
+    private val _uiState = MutableStateFlow(SettingsUiState(isDiagnosticsEnabled = configStore.isDiagnosticsEnabled()))
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    override fun onDiagnosticsEnabledChange(value: Boolean) {
+        configStore.setDiagnosticsEnabled(value)
+        _uiState.update { it.copy(isDiagnosticsEnabled = value) }
+    }
 
     override fun onExportConfirmed(uri: Uri) {
         viewModelScope.launch {

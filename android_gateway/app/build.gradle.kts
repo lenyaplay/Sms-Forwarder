@@ -103,6 +103,8 @@ dependencies {
 
     implementation(libs.work.runtime.ktx)
 
+    implementation(libs.metrics.performance)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)

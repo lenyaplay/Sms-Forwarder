@@ -6,6 +6,7 @@ import com.smsforwarder.gateway.data.local.SmsHistoryImporter
 import com.smsforwarder.gateway.data.local.db.ConversationEntity
 import com.smsforwarder.gateway.data.local.db.MessageEntity
 import com.smsforwarder.gateway.data.repository.MessageRepository
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -129,6 +130,28 @@ class ConversationsViewModelTest {
         viewModel.onResendAllFailed()
 
         runBlocking { verify(repository).retryAllFailed() }
+    }
+
+    @Test
+    fun hasLoadedOnceStaysFalseUntilFlowEmitsThenBecomesTrue() {
+        val repository: MessageRepository = mock()
+        val conversationsFlow = MutableSharedFlow<List<ConversationEntity>>() // no replay - subscriber controls timing
+        whenever(repository.observeConversations(false)).thenReturn(conversationsFlow)
+        whenever(repository.observeFailedCount()).thenReturn(flowOf(0))
+        val historyImporter: SmsHistoryImporter = mock()
+        whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
+        lateinit var viewModel: ConversationsViewModel
+        composeRule.setContent {
+            viewModel = ConversationsViewModel(repository, mock(), historyImporter)
+        }
+
+        assertEquals(false, runBlocking { viewModel.uiState.first().hasLoadedOnce })
+
+        runBlocking { conversationsFlow.emit(emptyList()) }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking { viewModel.uiState.first().hasLoadedOnce }
+        }
     }
 
     @Test

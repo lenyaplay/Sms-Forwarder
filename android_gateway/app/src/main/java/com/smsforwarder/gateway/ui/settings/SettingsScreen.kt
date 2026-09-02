@@ -4,11 +4,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -17,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -30,6 +33,7 @@ object SettingsTestTags {
     const val EXPORT_BUTTON = "settings_export_button"
     const val IMPORT_BUTTON = "settings_import_button"
     const val MESSAGE = "settings_message"
+    const val DIAGNOSTICS_SWITCH = "settings_diagnostics_switch"
 }
 
 private const val EXPORT_FILE_NAME = "sms-forwarder-gateway-settings.json"
@@ -58,6 +62,7 @@ fun SettingsContent(
         override fun onExportConfirmed(uri: android.net.Uri) {}
         override fun onImportConfirmed(uri: android.net.Uri) {}
         override fun onMessageDismissed() {}
+        override fun onDiagnosticsEnabledChange(value: Boolean) {}
     },
     onOpenDelivery: () -> Unit = {},
     onOpenFilterRules: () -> Unit = {},
@@ -73,54 +78,81 @@ fun SettingsContent(
     }
 
     Scaffold { padding ->
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(padding)
-                .padding(16.dp),
-        ) {
-            Column(
+        Column(modifier = Modifier.fillMaxWidth().padding(padding)) {
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                TextButton(
-                    onClick = onOpenDelivery,
-                    modifier = Modifier.testTag(SettingsTestTags.OPEN_DELIVERY_BUTTON),
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Text("Доставка")
+                    TextButton(
+                        onClick = onOpenDelivery,
+                        modifier = Modifier.testTag(SettingsTestTags.OPEN_DELIVERY_BUTTON),
+                    ) {
+                        Text("Доставка")
+                    }
+                    TextButton(
+                        onClick = onOpenFilterRules,
+                        modifier = Modifier.testTag(SettingsTestTags.OPEN_FILTER_RULES_BUTTON),
+                    ) {
+                        Text("Фильтрация SMS")
+                    }
+                    TextButton(
+                        onClick = onOpenDeliveryLog,
+                        modifier = Modifier.testTag(SettingsTestTags.OPEN_DELIVERY_LOG_BUTTON),
+                    ) {
+                        Text("Лог доставки")
+                    }
+                    TextButton(
+                        onClick = { showExportWarning = true },
+                        modifier = Modifier.testTag(SettingsTestTags.EXPORT_BUTTON),
+                    ) {
+                        Text("Экспортировать настройки")
+                    }
+                    TextButton(
+                        onClick = { importLauncher.launch(arrayOf("application/json")) },
+                        modifier = Modifier.testTag(SettingsTestTags.IMPORT_BUTTON),
+                    ) {
+                        Text("Импортировать настройки")
+                    }
+                    uiState.message?.let { message ->
+                        Text(
+                            text = message,
+                            color = if (uiState.isMessageError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.testTag(SettingsTestTags.MESSAGE),
+                        )
+                    }
                 }
-                TextButton(
-                    onClick = onOpenFilterRules,
-                    modifier = Modifier.testTag(SettingsTestTags.OPEN_FILTER_RULES_BUTTON),
-                ) {
-                    Text("Фильтрация SMS")
-                }
-                TextButton(
-                    onClick = onOpenDeliveryLog,
-                    modifier = Modifier.testTag(SettingsTestTags.OPEN_DELIVERY_LOG_BUTTON),
-                ) {
-                    Text("Лог доставки")
-                }
-                TextButton(
-                    onClick = { showExportWarning = true },
-                    modifier = Modifier.testTag(SettingsTestTags.EXPORT_BUTTON),
-                ) {
-                    Text("Экспортировать настройки")
-                }
-                TextButton(
-                    onClick = { importLauncher.launch(arrayOf("application/json")) },
-                    modifier = Modifier.testTag(SettingsTestTags.IMPORT_BUTTON),
-                ) {
-                    Text("Импортировать настройки")
-                }
-                uiState.message?.let { message ->
-                    Text(
-                        text = message,
-                        color = if (uiState.isMessageError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.testTag(SettingsTestTags.MESSAGE),
-                    )
+            }
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text("Диагностика", style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Замер производительности экранов и фоновых операций - пишет в logcat и в файл на устройстве",
+                            modifier = Modifier.weight(1f).padding(end = 8.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Switch(
+                            checked = uiState.isDiagnosticsEnabled,
+                            onCheckedChange = { actions.onDiagnosticsEnabledChange(it) },
+                            modifier = Modifier.testTag(SettingsTestTags.DIAGNOSTICS_SWITCH),
+                        )
+                    }
                 }
             }
         }

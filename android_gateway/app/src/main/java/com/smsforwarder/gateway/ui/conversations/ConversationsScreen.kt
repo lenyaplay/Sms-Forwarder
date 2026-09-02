@@ -124,6 +124,7 @@ fun ConversationsScreen(
                 ConversationsContent(
                     conversations = uiState.conversations,
                     isImporting = uiState.isImporting,
+                    hasLoadedOnce = uiState.hasLoadedOnce,
                     isArchivedView = uiState.isArchivedView,
                     onOpenThread = onOpenThread,
                     onArchiveToggle = { sender -> viewModel.onArchiveToggle(sender, uiState.isArchivedView) },
@@ -201,6 +202,7 @@ private fun SearchResultsList(results: List<MessageEntity>, onOpenThread: (Strin
 fun ConversationsContent(
     conversations: List<ConversationUi>,
     isImporting: Boolean,
+    hasLoadedOnce: Boolean = true,
     isArchivedView: Boolean = false,
     onOpenThread: (String, Long?) -> Unit,
     onArchiveToggle: (String) -> Unit = {},
@@ -211,7 +213,7 @@ fun ConversationsContent(
         if (isImporting) {
             LinearProgressIndicator(modifier = Modifier.fillMaxWidth().testTag(ConversationsTestTags.IMPORTING_INDICATOR))
         }
-        if (conversations.isEmpty() && !isImporting) {
+        if (conversations.isEmpty() && !isImporting && hasLoadedOnce) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     text = if (isArchivedView) "Архив пуст" else "Нет сообщений",

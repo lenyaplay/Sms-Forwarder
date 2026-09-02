@@ -5,6 +5,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.smsforwarder.gateway.ui.common.ConfirmDialogTestTags
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -72,6 +73,26 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag(ConfirmDialogTestTags.DISMISS_BUTTON).performClick()
 
         composeRule.onNodeWithText("Экспортировать настройки?").assertDoesNotExist()
+    }
+
+    @Test
+    fun diagnosticsSwitchReflectsUiStateAndTogglingInvokesAction() {
+        var lastValue: Boolean? = null
+        val actions = object : SettingsActions {
+            override fun onExportConfirmed(uri: android.net.Uri) {}
+            override fun onImportConfirmed(uri: android.net.Uri) {}
+            override fun onMessageDismissed() {}
+            override fun onDiagnosticsEnabledChange(value: Boolean) {
+                lastValue = value
+            }
+        }
+        composeRule.setContent {
+            SettingsContent(uiState = SettingsUiState(isDiagnosticsEnabled = false), actions = actions)
+        }
+
+        composeRule.onNodeWithTag(SettingsTestTags.DIAGNOSTICS_SWITCH).performClick()
+
+        assertEquals(true, lastValue)
     }
 
     @Test

@@ -16,6 +16,7 @@ import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.GatewayDatabase
 import com.smsforwarder.gateway.data.local.db.MessageDao
 import com.smsforwarder.gateway.data.local.db.MessageEntity
+import com.smsforwarder.gateway.data.perf.PerfMonitor
 import com.smsforwarder.gateway.data.repository.MessageRepository
 import com.smsforwarder.gateway.sms.DeliveryResultNotifier
 import kotlinx.coroutines.flow.first
@@ -112,6 +113,7 @@ class WebhookRequestWorkerTest {
                     contactNameResolver,
                     OkHttpClient(),
                     Json { ignoreUnknownKeys = true },
+                    PerfMonitor(appContext, configStore),
                 )
             })
             .build()

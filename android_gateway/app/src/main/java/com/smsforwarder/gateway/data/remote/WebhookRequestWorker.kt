@@ -11,6 +11,7 @@ import com.smsforwarder.gateway.data.local.db.DeliveryLogDao
 import com.smsforwarder.gateway.data.local.db.DeliveryLogEntity
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.MessageDao
+import com.smsforwarder.gateway.data.perf.PerfMonitor
 import com.smsforwarder.gateway.data.repository.MessageRepository
 import com.smsforwarder.gateway.sms.DeliveryResultNotifier
 import dagger.assisted.Assisted
@@ -43,14 +44,19 @@ class WebhookRequestWorker @AssistedInject constructor(
     private val contactNameResolver: ContactNameResolver,
     private val okHttpClient: OkHttpClient,
     private val json: Json,
+    private val perfMonitor: PerfMonitor,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        perfMonitor.measure("webhook_delivery") { deliver() }
+    }
+
+    private suspend fun deliver(): Result {
         val messageId = inputData.getLong(KEY_MESSAGE_ID, -1)
-        if (messageId == -1L) return@withContext Result.failure()
+        if (messageId == -1L) return Result.failure()
 
         val maxAttempts = configStore.retryMaxAttempts()
-        val message = messageDao.getById(messageId) ?: return@withContext Result.failure()
+        val message = messageDao.getById(messageId) ?: return Result.failure()
         val webhookUrl = configStore.webhookUrl()
         if (webhookUrl == null) {
             // Not configured yet - retry (bounded by maxAttempts like any other
@@ -59,7 +65,7 @@ class WebhookRequestWorker @AssistedInject constructor(
             // arrived (DeliveryViewModel.onSave also re-enqueues any message
             // still not SENT, so this message isn't solely dependent on
             // outliving its own backoff window either).
-            return@withContext if (runAttemptCount >= maxAttempts) Result.failure() else Result.retry()
+            return if (runAttemptCount >= maxAttempts) Result.failure() else Result.retry()
         }
 
         val contactName = if (!configStore.hideContactNameInPayload()) contactNameResolver.displayNameFor(message.sender) else null
@@ -88,7 +94,7 @@ class WebhookRequestWorker @AssistedInject constructor(
             )
         )
 
-        if (success) {
+        return if (success) {
             messageDao.update(message.copy(deliveryStatus = DeliveryStatus.SENT))
             if (runAttemptCount > 1) {
                 deliveryResultNotifier.notifyDeliverySucceededAfterRetry(message.sender, runAttemptCount)

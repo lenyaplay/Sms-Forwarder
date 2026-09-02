@@ -23,6 +23,7 @@ espresso = "3.6.1"
 mockwebserver = "4.12.0"
 mockitoKotlin = "5.4.0"
 mockitoCore = "5.14.2"
+metricsPerformance = "1.0.0-beta01"
 
 [libraries]
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -67,6 +68,7 @@ espresso-core = { group = "androidx.test.espresso", name = "espresso-core", vers
 mockito-kotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", version.ref = "mockitoKotlin" }
 mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mockitoCore" }
 mockito-android = { group = "org.mockito", name = "mockito-android", version.ref = "mockitoCore" }
+metrics-performance = { group = "androidx.metrics", name = "metrics-performance", version.ref = "metricsPerformance" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

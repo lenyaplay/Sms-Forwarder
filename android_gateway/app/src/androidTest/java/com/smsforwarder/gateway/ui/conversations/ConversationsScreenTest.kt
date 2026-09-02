@@ -44,6 +44,15 @@ class ConversationsScreenTest {
     }
 
     @Test
+    fun emptyStateNotShownBeforeFirstFlowEmission() {
+        composeRule.setContent {
+            ConversationsContent(conversations = emptyList(), isImporting = false, hasLoadedOnce = false, onOpenThread = { _, _ -> })
+        }
+
+        composeRule.onNodeWithTag(ConversationsTestTags.EMPTY_STATE).assertDoesNotExist()
+    }
+
+    @Test
     fun importingIndicatorShownInsteadOfEmptyStateWhileImporting() {
         composeRule.setContent {
             ConversationsContent(conversations = emptyList(), isImporting = true, onOpenThread = { _, _ -> })

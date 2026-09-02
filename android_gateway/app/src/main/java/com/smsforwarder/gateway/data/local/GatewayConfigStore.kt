@@ -115,6 +115,26 @@ open class GatewayConfigStore(context: Context) {
         prefs.edit().putBoolean(KEY_HIDE_CONTACT_NAME_IN_PAYLOAD, value).apply()
     }
 
+    /** Default false - opt-in diagnostics, not a dev-only gate; gates both JankStats screen tracking and background-operation timers (spec 0022), works on any build type. */
+    open fun isDiagnosticsEnabled(): Boolean = prefs.getBoolean(KEY_DIAGNOSTICS_ENABLED, false)
+
+    open fun setDiagnosticsEnabled(value: Boolean) {
+        prefs.edit().putBoolean(KEY_DIAGNOSTICS_ENABLED, value).apply()
+    }
+
+    /** Lets PerfMonitor react to the diagnostics toggle without polling every frame (e.g. to flip JankStats.isTrackingEnabled live). */
+    open fun addOnDiagnosticsEnabledChangeListener(listener: (Boolean) -> Unit): SharedPreferences.OnSharedPreferenceChangeListener {
+        val prefsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == KEY_DIAGNOSTICS_ENABLED) listener(isDiagnosticsEnabled())
+        }
+        prefs.registerOnSharedPreferenceChangeListener(prefsListener)
+        return prefsListener
+    }
+
+    open fun removeOnDiagnosticsEnabledChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+    }
+
     /** Point removals, not .clear() - this prefs file also holds filter modes and import bookkeeping, which must survive a delivery reset untouched. */
     open fun resetDeliverySettings() {
         prefs.edit()
@@ -141,5 +161,6 @@ open class GatewayConfigStore(context: Context) {
         const val KEY_FORWARDING_PAUSED = "forwarding_paused"
         const val KEY_DELETE_AFTER_FORWARD = "delete_after_forward"
         const val KEY_HIDE_CONTACT_NAME_IN_PAYLOAD = "hide_contact_name_in_payload"
+        const val KEY_DIAGNOSTICS_ENABLED = "diagnostics_enabled"
     }
 }

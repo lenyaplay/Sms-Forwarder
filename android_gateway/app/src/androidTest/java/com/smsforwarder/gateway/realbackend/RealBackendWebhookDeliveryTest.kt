@@ -10,6 +10,7 @@ import com.smsforwarder.gateway.data.local.GatewayConfigStore
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.GatewayDatabase
 import com.smsforwarder.gateway.data.local.db.MessageEntity
+import com.smsforwarder.gateway.data.perf.PerfMonitor
 import com.smsforwarder.gateway.data.remote.WebhookRequestWorker
 import com.smsforwarder.gateway.data.repository.MessageRepository
 import com.smsforwarder.gateway.sms.DeliveryResultNotifier
@@ -81,6 +82,7 @@ class RealBackendWebhookDeliveryTest {
                     mock<ContactNameResolver>(),
                     OkHttpClient(),
                     Json { ignoreUnknownKeys = true },
+                    PerfMonitor(appContext, configStore),
                 )
             })
             .build()

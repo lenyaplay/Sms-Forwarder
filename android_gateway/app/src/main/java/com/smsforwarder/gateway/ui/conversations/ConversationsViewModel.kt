@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -32,6 +33,8 @@ data class ConversationsUiState(
     val searchResults: List<MessageEntity> = emptyList(),
     val isImporting: Boolean = false,
     val failedCount: Int = 0,
+    /** False until observeConversations's Flow has emitted at least once - distinguishes "not loaded yet" from "loaded, genuinely empty" so cold start doesn't flash an empty-state message on data that's already in Room (spec 0022). Transient UI flag, not persisted. */
+    val hasLoadedOnce: Boolean = false,
 ) {
     val isSearching: Boolean get() = query.isNotBlank()
 }
@@ -114,7 +117,7 @@ class ConversationsViewModel @Inject constructor(
     private fun observeConversations(archived: Boolean) {
         conversationsJob?.cancel()
         conversationsJob = viewModelScope.launch {
-            repository.observeConversations(archived).collect { conversations ->
+            repository.observeConversations(archived).distinctUntilChanged().collect { conversations ->
                 val conversationsUi = withContext(Dispatchers.IO) {
                     conversations.map { entity ->
                         ConversationUi(
@@ -129,7 +132,7 @@ class ConversationsViewModel @Inject constructor(
                         )
                     }
                 }
-                _uiState.update { it.copy(conversations = conversationsUi) }
+                _uiState.update { it.copy(conversations = conversationsUi, hasLoadedOnce = true) }
             }
         }
     }

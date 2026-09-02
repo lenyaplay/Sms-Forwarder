@@ -8,6 +8,7 @@ import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.MessageDao
 import com.smsforwarder.gateway.data.local.db.MessageDirection
 import com.smsforwarder.gateway.data.local.db.MessageEntity
+import com.smsforwarder.gateway.data.perf.PerfMonitor
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,6 +80,7 @@ open class SmsHistoryImporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val messageDao: MessageDao,
     private val configStore: GatewayConfigStore,
+    private val perfMonitor: PerfMonitor,
 ) {
     private val _isImporting = MutableStateFlow(false)
     open val isImporting: StateFlow<Boolean> = _isImporting.asStateFlow()
@@ -93,23 +95,25 @@ open class SmsHistoryImporter @Inject constructor(
         if (configStore.isHistoryImported()) return
         _isImporting.value = true
         try {
-            mutex.withLock {
-                withContext(Dispatchers.IO) {
-                    var maxRowId = 0L
-                    context.contentResolver.query(Telephony.Sms.CONTENT_URI, HISTORY_PROJECTION, null, null, null)?.use { cursor ->
-                        val idCol = cursor.getColumnIndex(Telephony.Sms._ID)
-                        val addressCol = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
-                        val bodyCol = cursor.getColumnIndex(Telephony.Sms.BODY)
-                        val dateCol = cursor.getColumnIndex(Telephony.Sms.DATE)
-                        val typeCol = cursor.getColumnIndex(Telephony.Sms.TYPE)
-                        while (cursor.moveToNext()) {
-                            val rowId = if (idCol >= 0) cursor.getLong(idCol) else 0L
-                            if (rowId > maxRowId) maxRowId = rowId
-                            cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol)?.let { messageDao.upsertFromSystemProvider(rowId, it) }
+            perfMonitor.measure("history_import") {
+                mutex.withLock {
+                    withContext(Dispatchers.IO) {
+                        var maxRowId = 0L
+                        context.contentResolver.query(Telephony.Sms.CONTENT_URI, HISTORY_PROJECTION, null, null, null)?.use { cursor ->
+                            val idCol = cursor.getColumnIndex(Telephony.Sms._ID)
+                            val addressCol = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
+                            val bodyCol = cursor.getColumnIndex(Telephony.Sms.BODY)
+                            val dateCol = cursor.getColumnIndex(Telephony.Sms.DATE)
+                            val typeCol = cursor.getColumnIndex(Telephony.Sms.TYPE)
+                            while (cursor.moveToNext()) {
+                                val rowId = if (idCol >= 0) cursor.getLong(idCol) else 0L
+                                if (rowId > maxRowId) maxRowId = rowId
+                                cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol)?.let { messageDao.upsertFromSystemProvider(rowId, it) }
+                            }
                         }
+                        configStore.setLastSyncedSmsRowId(maxRowId)
+                        configStore.markHistoryImported()
                     }
-                    configStore.setLastSyncedSmsRowId(maxRowId)
-                    configStore.markHistoryImported()
                 }
             }
         } catch (e: Exception) {
