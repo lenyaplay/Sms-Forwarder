@@ -22,6 +22,8 @@ interface DeliveryActions {
     fun onBaseIntervalSecondsChange(value: String)
     fun onBackoffPolicyChange(value: BackoffPolicy)
     fun onForwardingPausedChange(value: Boolean)
+    fun onDeleteAfterForwardChange(value: Boolean)
+    fun onHideContactNameInPayloadChange(value: Boolean)
     fun onSave()
     fun onTestConnection()
     fun onResetDeliverySettings()
@@ -44,6 +46,8 @@ class DeliveryViewModel @Inject constructor(
         baseIntervalSeconds = configStore.retryBaseIntervalSeconds().toString(),
         backoffPolicy = configStore.retryBackoffPolicy(),
         forwardingPaused = configStore.isForwardingPaused(),
+        deleteAfterForward = configStore.deleteAfterForward(),
+        hideContactNameInPayload = configStore.hideContactNameInPayload(),
     )
 
     override fun onServerUrlChange(value: String) {
@@ -70,6 +74,14 @@ class DeliveryViewModel @Inject constructor(
         _uiState.update { it.copy(forwardingPaused = value, isSaved = false) }
     }
 
+    override fun onDeleteAfterForwardChange(value: Boolean) {
+        _uiState.update { it.copy(deleteAfterForward = value, isSaved = false) }
+    }
+
+    override fun onHideContactNameInPayloadChange(value: Boolean) {
+        _uiState.update { it.copy(hideContactNameInPayload = value, isSaved = false) }
+    }
+
     override fun onSave() {
         val state = _uiState.value
         if (!state.canSave) return
@@ -79,6 +91,8 @@ class DeliveryViewModel @Inject constructor(
             configStore.setRetryBaseIntervalSeconds(state.baseIntervalSeconds.toLong())
             configStore.setRetryBackoffPolicy(state.backoffPolicy)
             configStore.setForwardingPaused(state.forwardingPaused)
+            configStore.setDeleteAfterForward(state.deleteAfterForward)
+            configStore.setHideContactNameInPayload(state.hideContactNameInPayload)
             // No-op while still paused - enqueueDelivery withholds the WorkManager
             // job itself (MessageRepository), so this is safe to always call.
             messageRepository.retryUndeliveredMessages()

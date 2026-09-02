@@ -10,4 +10,6 @@ data class WebhookPayload(
     val sentStamp: String? = null,
     val receivedStamp: String? = null,
     val sim: String? = null,
+    /** Additive, opt-in extension (spec 0018) - omitted/null unless the user explicitly disables GatewayConfigStore.hideContactNameInPayload(). */
+    val contactName: String? = null,
 )

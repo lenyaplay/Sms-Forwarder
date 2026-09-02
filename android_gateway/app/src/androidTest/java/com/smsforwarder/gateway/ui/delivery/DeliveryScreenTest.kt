@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
 import com.smsforwarder.gateway.data.local.GatewayConfigStore
@@ -38,6 +39,7 @@ class DeliveryScreenTest {
         whenever(store.retryMaxAttempts()).thenReturn(maxAttempts)
         whenever(store.retryBaseIntervalSeconds()).thenReturn(baseIntervalSeconds)
         whenever(store.retryBackoffPolicy()).thenReturn(backoffPolicy)
+        whenever(store.hideContactNameInPayload()).thenReturn(true)
         return store
     }
 
@@ -138,6 +140,40 @@ class DeliveryScreenTest {
             composeRule.onAllNodesWithTag(DeliveryTestTags.SAVED_CONFIRMATION).fetchSemanticsNodes().isNotEmpty()
         }
         verify(store).setForwardingPaused(true)
+    }
+
+    @Test
+    fun deleteAfterForwardSwitchPersistsOnSave() {
+        val store = mockStore("https://example.com", "tok-123")
+        val repository = mockRepository()
+        composeRule.setContent {
+            DeliveryScreen(viewModel = DeliveryViewModel(store, repository, mockConnectionTester()), onBack = {})
+        }
+
+        composeRule.onNodeWithTag(DeliveryTestTags.DELETE_AFTER_FORWARD_SWITCH).performScrollTo().performClick()
+        composeRule.onNodeWithTag(DeliveryTestTags.SAVE_BUTTON).performScrollTo().performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(DeliveryTestTags.SAVED_CONFIRMATION).fetchSemanticsNodes().isNotEmpty()
+        }
+        verify(store).setDeleteAfterForward(true)
+    }
+
+    @Test
+    fun hideContactNameSwitchPersistsOnSave() {
+        val store = mockStore("https://example.com", "tok-123")
+        val repository = mockRepository()
+        composeRule.setContent {
+            DeliveryScreen(viewModel = DeliveryViewModel(store, repository, mockConnectionTester()), onBack = {})
+        }
+
+        composeRule.onNodeWithTag(DeliveryTestTags.HIDE_CONTACT_NAME_SWITCH).performScrollTo().performClick()
+        composeRule.onNodeWithTag(DeliveryTestTags.SAVE_BUTTON).performScrollTo().performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithTag(DeliveryTestTags.SAVED_CONFIRMATION).fetchSemanticsNodes().isNotEmpty()
+        }
+        verify(store).setHideContactNameInPayload(false)
     }
 
     @Test
@@ -246,7 +282,7 @@ class DeliveryScreenTest {
             DeliveryScreen(viewModel = DeliveryViewModel(store, mockRepository(), mockConnectionTester()), onBack = {})
         }
 
-        composeRule.onNodeWithTag(DeliveryTestTags.RESET_BUTTON).performClick()
+        composeRule.onNodeWithTag(DeliveryTestTags.RESET_BUTTON).performScrollTo().performClick()
         composeRule.onNodeWithText("Сбросить настройки доставки?").assertExists()
 
         composeRule.onNodeWithTag(com.smsforwarder.gateway.ui.common.ConfirmDialogTestTags.DISMISS_BUTTON).performClick()
@@ -275,7 +311,7 @@ class DeliveryScreenTest {
             DeliveryScreen(viewModel = DeliveryViewModel(store, mockRepository(), mockConnectionTester()), onBack = {})
         }
 
-        composeRule.onNodeWithTag(DeliveryTestTags.RESET_BUTTON).performClick()
+        composeRule.onNodeWithTag(DeliveryTestTags.RESET_BUTTON).performScrollTo().performClick()
         composeRule.onNodeWithTag(com.smsforwarder.gateway.ui.common.ConfirmDialogTestTags.CONFIRM_BUTTON).performClick()
 
         verify(store).resetDeliverySettings()

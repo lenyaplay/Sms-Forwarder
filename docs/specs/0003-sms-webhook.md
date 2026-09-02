@@ -35,10 +35,13 @@ Milestone 3 (`docs/Roadmap.md`). Устройства и `upload_token` уже �
   "text": "string",
   "sentStamp": "string",
   "receivedStamp": "string",
-  "sim": "string"
+  "sim": "string",
+  "contactName": "string"
 }
 ```
 `from`, `text` обязательны и непустые. `sentStamp`, `receivedStamp`, `sim` опциональны (могут отсутствовать или быть пустыми — сохраняются как `NULL`).
+
+`contactName` — аддитивное расширение (спека [0018-gateway-delete-contact-privacy-export.md](0018-gateway-delete-contact-privacy-export.md)), опционально, отправляется только собственным Android Gateway App и только если пользователь явно включил передачу имени контакта (по умолчанию поле отсутствует/`null`). Backend не парсит и не сохраняет это поле — незнакомое поле в JSON игнорируется существующим декодером без изменений на стороне бэкенда, обратная совместимость сохраняется.
 
 Ответ `201 Created` (новое сообщение сохранено):
 ```json

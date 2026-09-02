@@ -87,4 +87,26 @@ class GatewayConfigStoreTest {
         assertTrue(store.isHistoryImported())
         assertEquals(42L, store.lastSyncedSmsRowId())
     }
+
+    @Test
+    fun deleteAfterForwardDefaultsToFalse() {
+        assertEquals(false, store.deleteAfterForward())
+    }
+
+    @Test
+    fun deleteAfterForwardRoundTrips() {
+        store.setDeleteAfterForward(true)
+        assertEquals(true, store.deleteAfterForward())
+    }
+
+    @Test
+    fun hideContactNameInPayloadDefaultsToTrue() {
+        assertEquals(true, store.hideContactNameInPayload())
+    }
+
+    @Test
+    fun hideContactNameInPayloadRoundTrips() {
+        store.setHideContactNameInPayload(false)
+        assertEquals(false, store.hideContactNameInPayload())
+    }
 }

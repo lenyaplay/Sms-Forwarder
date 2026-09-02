@@ -33,12 +33,20 @@
 
 ## Milestone 20 — Android Gateway App: delete-after-forward, имя контакта в payload, экспорт/импорт настроек
 
-Выявлено при анализе issues референсного проекта bogkonstantin/android_income_sms_gateway_webhook (#102/#57, #61/#43, #76). Спека: [0018-gateway-delete-contact-privacy-export](../specs/0018-gateway-delete-contact-privacy-export.md) (Draft).
+Выявлено при анализе issues референсного проекта bogkonstantin/android_income_sms_gateway_webhook (#102/#57, #61/#43, #76). Спека: [0018-gateway-delete-contact-privacy-export](../specs/0018-gateway-delete-contact-privacy-export.md) (Implemented).
 
-- [ ] Удаление сообщения/диалога (ручное и автоматическое «после успешной пересылки») чистит и Room, и соответствующую запись в `content://sms` — согласовано с владельцем продукта как изменение поведения уже существующей ручной фичи удаления
-- [ ] Новое поле `MessageEntity.systemSmsId` для сопоставления с `content://sms`-строкой, бэкфилл через `SmsHistoryImporter`
-- [ ] Новое поле `contactName` в `WebhookPayload` (аддитивное расширение [0003-sms-webhook.md](../specs/0003-sms-webhook.md)), скрыто по умолчанию (`hideContactNameInPayload = true`)
-- [ ] Экспорт/импорт настроек (server URL, token, retry, правила фильтрации) в JSON через Storage Access Framework, с полной валидацией перед атомарным применением на импорте
+- [x] Удаление сообщения/диалога (ручное и автоматическое «после успешной пересылки») чистит и Room, и соответствующую запись в `content://sms` — `MessageRepository.deleteFromSystemStore()`, живо подтверждено на TECNO LI9 (реальная SMS удалена через UI, пропала и из `content://sms`, и из `content://sms`-запроса `adb shell content query`, и из треда)
+- [x] Новое поле `MessageEntity.systemSmsId` для сопоставления с `content://sms`-строкой, бэкфилл через `SmsHistoryImporter` (нечёткое сопоставление ±2000мс по `sentStamp`/`receivedStamp` — точное совпадение не работает, carrier vs. local время; исходящие бэкфиллятся бесплатно через уже существующий `ContentObserver` на всё дерево `content://sms`, без новой проводки)
+- [x] Новое поле `contactName` в `WebhookPayload` (аддитивное расширение [0003-sms-webhook.md](../specs/0003-sms-webhook.md)), скрыто по умолчанию (`hideContactNameInPayload = true`) — подтверждено инструментированным тестом на реальном теле HTTP-запроса (MockWebServer), поле физически отсутствует в JSON при дефолте, не `null`
+- [x] Экспорт/импорт настроек (server URL, token, retry, правила фильтрации) в JSON через Storage Access Framework, с полной валидацией перед атомарным применением на импорте (`GatewaySettingsExporter`)
+
+**Техническая поправка, не изменение требования:** спека предполагала `GatewayDatabase.version = 6`/`MIGRATION_5_6` для `systemSmsId` — этот слот уже занят индексом из Milestone 18 (спека 0018 написана раньше). Реализовано как `version = 7`/`MIGRATION_6_7`.
+
+**Уточнено с владельцем продукта в этой сессии** (не было явно зафиксировано в спеке): импорт настроек полностью заменяет правила фильтрации на целевом устройстве, не сливает с уже существующими — иначе повторный импорт одного файла давал бы дубли.
+
+Найдено `peer-review-template` и исправлено (два реальных дефекта): (1) замена правил фильтрации при импорте (`deleteAll()` + цикл `upsert()`) не была обёрнута в `@Transaction`, вопреки заявленной в коде атомарности — крах процесса посреди цикла мог оставить правила частично восстановленными; исправлено новым `FilterRuleDao.replaceAll()` (`@Transaction`). (2) сортировка кандидатов бэкфилла `systemSmsId` учитывала близость только `receivedStamp`, хотя запрос может сматчить строку и по `sentStamp` — «ближайший» кандидат мог оказаться не самым близким; исправлено сортировкой по минимуму обоих расстояний.
+
+Тестовое покрытие: 127/127 инструментированных зелёных на TECNO LI9 (было 101 после Milestone 19), включая реальный `ContentResolver`/`SecurityException`-путь в `MessageRepositoryTest` (без моков) и реальное тело HTTP-запроса в `WebhookRequestWorkerTest`. Живая проверка вручную покрыла ручное удаление сообщения целиком (см. выше); «удалить после пересылки» и экспорт/импорт через реальный SAF-файл на переустановленном приложении отдельно не прогонялись — оба переиспользуют уже отдельно живо проверенный/полно протестированный код (тот же `deleteMessage`, тот же раунд-трип сериализации), риск расхождения оценён как низкий — не блокирует `Implemented`, по аналогии с прошлыми milestone'ами.
 
 ## Milestone 21 — Android Gateway App: измеримая диагностика производительности, инструментарий по требованию, быстрый холодный старт
 

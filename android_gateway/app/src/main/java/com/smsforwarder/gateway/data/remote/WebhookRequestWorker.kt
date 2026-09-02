@@ -5,11 +5,13 @@ import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.smsforwarder.gateway.data.local.ContactNameResolver
 import com.smsforwarder.gateway.data.local.GatewayConfigStore
 import com.smsforwarder.gateway.data.local.db.DeliveryLogDao
 import com.smsforwarder.gateway.data.local.db.DeliveryLogEntity
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.MessageDao
+import com.smsforwarder.gateway.data.repository.MessageRepository
 import com.smsforwarder.gateway.sms.DeliveryResultNotifier
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -37,6 +39,8 @@ class WebhookRequestWorker @AssistedInject constructor(
     private val messageDao: MessageDao,
     private val deliveryLogDao: DeliveryLogDao,
     private val deliveryResultNotifier: DeliveryResultNotifier,
+    private val messageRepository: MessageRepository,
+    private val contactNameResolver: ContactNameResolver,
     private val okHttpClient: OkHttpClient,
     private val json: Json,
 ) : CoroutineWorker(context, params) {
@@ -58,7 +62,8 @@ class WebhookRequestWorker @AssistedInject constructor(
             return@withContext if (runAttemptCount >= maxAttempts) Result.failure() else Result.retry()
         }
 
-        val payload = WebhookPayloadMapper.toPayload(message)
+        val contactName = if (!configStore.hideContactNameInPayload()) contactNameResolver.displayNameFor(message.sender) else null
+        val payload = WebhookPayloadMapper.toPayload(message, contactName)
         val body = json.encodeToString(WebhookPayload.serializer(), payload)
             .toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder().url(webhookUrl).post(body).build()
@@ -88,6 +93,9 @@ class WebhookRequestWorker @AssistedInject constructor(
             if (runAttemptCount > 1) {
                 deliveryResultNotifier.notifyDeliverySucceededAfterRetry(message.sender, runAttemptCount)
             }
+            // After the SENT status write, not before - so delivery_log/the
+            // success notification above still see a message that exists.
+            if (configStore.deleteAfterForward()) messageRepository.deleteMessage(messageId)
             Result.success()
         } else if (runAttemptCount >= maxAttempts) {
             messageDao.update(message.copy(deliveryStatus = DeliveryStatus.FAILED))

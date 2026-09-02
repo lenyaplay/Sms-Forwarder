@@ -5,11 +5,13 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
+import com.smsforwarder.gateway.data.local.ContactNameResolver
 import com.smsforwarder.gateway.data.local.GatewayConfigStore
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.GatewayDatabase
 import com.smsforwarder.gateway.data.local.db.MessageEntity
 import com.smsforwarder.gateway.data.remote.WebhookRequestWorker
+import com.smsforwarder.gateway.data.repository.MessageRepository
 import com.smsforwarder.gateway.sms.DeliveryResultNotifier
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -55,6 +57,9 @@ class RealBackendWebhookDeliveryTest {
 
         val configStore: GatewayConfigStore = mock()
         whenever(configStore.webhookUrl()).thenReturn("${REAL_BACKEND_BASE_URL}webhook?upload_token=$uploadToken")
+        whenever(configStore.retryMaxAttempts()).thenReturn(10)
+        whenever(configStore.hideContactNameInPayload()).thenReturn(true)
+        whenever(configStore.deleteAfterForward()).thenReturn(false)
 
         val worker = TestListenableWorkerBuilder<WebhookRequestWorker>(context)
             .setInputData(
@@ -72,6 +77,8 @@ class RealBackendWebhookDeliveryTest {
                     dao,
                     database.deliveryLogDao(),
                     mock<DeliveryResultNotifier>(),
+                    mock<MessageRepository>(),
+                    mock<ContactNameResolver>(),
                     OkHttpClient(),
                     Json { ignoreUnknownKeys = true },
                 )

@@ -9,12 +9,14 @@ import androidx.work.ListenableWorker.Result
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
+import com.smsforwarder.gateway.data.local.ContactNameResolver
 import com.smsforwarder.gateway.data.local.GatewayConfigStore
 import com.smsforwarder.gateway.data.local.db.DeliveryLogDao
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.GatewayDatabase
 import com.smsforwarder.gateway.data.local.db.MessageDao
 import com.smsforwarder.gateway.data.local.db.MessageEntity
+import com.smsforwarder.gateway.data.repository.MessageRepository
 import com.smsforwarder.gateway.sms.DeliveryResultNotifier
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -48,6 +50,8 @@ class WebhookRequestWorkerTest {
     private lateinit var deliveryLogDao: DeliveryLogDao
     private lateinit var configStore: GatewayConfigStore
     private lateinit var deliveryResultNotifier: DeliveryResultNotifier
+    private lateinit var messageRepository: MessageRepository
+    private lateinit var contactNameResolver: ContactNameResolver
     private val context: Context get() = ApplicationProvider.getApplicationContext()
 
     @Before
@@ -60,8 +64,12 @@ class WebhookRequestWorkerTest {
         deliveryLogDao = database.deliveryLogDao()
         configStore = mock()
         deliveryResultNotifier = mock()
+        messageRepository = mock()
+        contactNameResolver = mock()
         whenever(configStore.webhookUrl()).thenReturn(server.url("/webhook?upload_token=tok").toString())
         whenever(configStore.retryMaxAttempts()).thenReturn(10)
+        whenever(configStore.hideContactNameInPayload()).thenReturn(true)
+        whenever(configStore.deleteAfterForward()).thenReturn(false)
     }
 
     @After
@@ -100,6 +108,8 @@ class WebhookRequestWorkerTest {
                     dao,
                     deliveryLogDao,
                     deliveryResultNotifier,
+                    messageRepository,
+                    contactNameResolver,
                     OkHttpClient(),
                     Json { ignoreUnknownKeys = true },
                 )
@@ -202,5 +212,52 @@ class WebhookRequestWorkerTest {
         assertTrue(!entries[0].success)
         assertEquals("HTTP 500", entries[0].errorMessage)
         verify(deliveryResultNotifier).notifyDeliveryFailed("+15551234", 2)
+    }
+
+    @Test
+    fun deleteAfterForwardTrueDeletesMessageAfterSuccess() = runBlocking {
+        whenever(configStore.deleteAfterForward()).thenReturn(true)
+        server.enqueue(MockResponse().setResponseCode(201))
+        val messageId = insertMessage()
+
+        buildWorker(messageId).doWork()
+
+        verify(messageRepository).deleteMessage(messageId)
+    }
+
+    @Test
+    fun deleteAfterForwardFalseDoesNotDeleteMessage() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(201))
+        val messageId = insertMessage()
+
+        buildWorker(messageId).doWork()
+
+        verify(messageRepository, never()).deleteMessage(org.mockito.kotlin.any())
+    }
+
+    @Test
+    fun contactNameIncludedInPayloadWhenExplicitlyUnhidden() = runBlocking {
+        whenever(configStore.hideContactNameInPayload()).thenReturn(false)
+        whenever(contactNameResolver.displayNameFor("+15551234")).thenReturn("John Doe")
+        server.enqueue(MockResponse().setResponseCode(201))
+        val messageId = insertMessage()
+
+        buildWorker(messageId).doWork()
+
+        val requestBody = server.takeRequest().body.readUtf8()
+        assertTrue(requestBody.contains("\"contactName\":\"John Doe\""))
+    }
+
+    @Test
+    fun contactNameOmittedByDefault() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(201))
+        val messageId = insertMessage()
+
+        buildWorker(messageId).doWork()
+
+        val requestBody = server.takeRequest().body.readUtf8()
+        assertTrue(!requestBody.contains("contactName"))
+        verify(contactNameResolver, never()).displayNameFor(org.mockito.kotlin.any())
+        Unit
     }
 }

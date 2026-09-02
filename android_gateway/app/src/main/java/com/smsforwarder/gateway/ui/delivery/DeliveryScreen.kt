@@ -50,6 +50,8 @@ object DeliveryTestTags {
     const val BACKOFF_EXPONENTIAL = "delivery_backoff_exponential"
     const val BACKOFF_LINEAR = "delivery_backoff_linear"
     const val FORWARDING_PAUSED_SWITCH = "delivery_forwarding_paused_switch"
+    const val DELETE_AFTER_FORWARD_SWITCH = "delivery_delete_after_forward_switch"
+    const val HIDE_CONTACT_NAME_SWITCH = "delivery_hide_contact_name_switch"
     const val TEST_CONNECTION_BUTTON = "delivery_test_connection_button"
     const val TEST_CONNECTION_RESULT = "delivery_test_connection_result"
     const val SAVE_BUTTON = "delivery_save_button"
@@ -175,6 +177,36 @@ fun DeliveryContent(uiState: DeliveryUiState, actions: DeliveryActions, onBack: 
                     checked = uiState.forwardingPaused,
                     onCheckedChange = actions::onForwardingPausedChange,
                     modifier = Modifier.testTag(DeliveryTestTags.FORWARDING_PAUSED_SWITCH),
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Удалять после успешной пересылки", style = MaterialTheme.typography.titleSmall)
+                Switch(
+                    checked = uiState.deleteAfterForward,
+                    onCheckedChange = actions::onDeleteAfterForwardChange,
+                    modifier = Modifier.testTag(DeliveryTestTags.DELETE_AFTER_FORWARD_SWITCH),
+                )
+            }
+            Text(
+                text = "Удаляет сообщение и из приложения, и из системного хранилища SMS сразу после успешной доставки.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Скрывать имя контакта в пересылке", style = MaterialTheme.typography.titleSmall)
+                Switch(
+                    checked = uiState.hideContactNameInPayload,
+                    onCheckedChange = actions::onHideContactNameInPayloadChange,
+                    modifier = Modifier.testTag(DeliveryTestTags.HIDE_CONTACT_NAME_SWITCH),
                 )
             }
 

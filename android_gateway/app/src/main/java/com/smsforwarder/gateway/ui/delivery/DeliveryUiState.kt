@@ -10,6 +10,8 @@ data class DeliveryUiState(
     val baseIntervalSeconds: String = "",
     val backoffPolicy: BackoffPolicy = BackoffPolicy.EXPONENTIAL,
     val forwardingPaused: Boolean = false,
+    val deleteAfterForward: Boolean = false,
+    val hideContactNameInPayload: Boolean = true,
     val isSaved: Boolean = false,
     val isTestingConnection: Boolean = false,
     val testConnectionResult: TestConnectionResult? = null,

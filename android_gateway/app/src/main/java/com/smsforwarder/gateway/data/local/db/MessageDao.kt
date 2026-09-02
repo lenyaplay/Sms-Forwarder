@@ -58,6 +58,33 @@ interface MessageDao {
     @Query("SELECT * FROM messages WHERE text LIKE '%' || :query || '%' ORDER BY createdAt DESC")
     fun searchMessages(query: String): Flow<List<MessageEntity>>
 
+    @Query("SELECT systemSmsId FROM messages WHERE id = :id")
+    suspend fun getSystemSmsId(id: Long): Long?
+
+    @Query("SELECT systemSmsId FROM messages WHERE sender = :sender AND systemSmsId IS NOT NULL")
+    suspend fun getSystemSmsIdsForSender(sender: String): List<Long>
+
+    /**
+     * Backfill target for a content://sms row this app already stored (via
+     * SMS_DELIVER or sendMessage) but hasn't yet linked to its system-provider
+     * id. Matched by (sender, approximate timestamp) within a small window -
+     * content://sms's DATE/DATE_SENT columns don't reliably equal our own
+     * sentStamp/receivedStamp millisecond-for-millisecond (carrier PDU time
+     * vs. local receipt/send time, OEM-dependent), so an exact-equality match
+     * would rarely hit. Not guaranteed unique for two messages from the same
+     * sender within the window - a known/accepted limitation at this
+     * project's personal-use scale (see spec 0018).
+     */
+    @Query(
+        """
+        SELECT * FROM messages WHERE sender = :sender AND systemSmsId IS NULL
+        AND (receivedStamp BETWEEN :timestamp - 2000 AND :timestamp + 2000
+             OR sentStamp BETWEEN :timestamp - 2000 AND :timestamp + 2000)
+        ORDER BY MIN(ABS(receivedStamp - :timestamp), ABS(IFNULL(sentStamp, :timestamp) - :timestamp)) ASC LIMIT 1
+        """
+    )
+    suspend fun findUnmatchedForBackfill(sender: String, timestamp: Long): MessageEntity?
+
     @Query("DELETE FROM messages WHERE sender = :sender")
     suspend fun deleteBySender(sender: String)
 

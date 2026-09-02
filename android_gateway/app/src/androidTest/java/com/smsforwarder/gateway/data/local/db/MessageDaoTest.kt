@@ -165,4 +165,49 @@ class MessageDaoTest {
         assertEquals(1, archived.size)
         assertEquals("+15559999", archived[0].sender)
     }
+
+    @Test
+    fun findUnmatchedForBackfillMatchesWithinTheTimeWindow() = runBlocking {
+        val id = dao.insert(message().copy(sender = "+15551234", receivedStamp = 10_000L, systemSmsId = null))
+
+        val found = dao.findUnmatchedForBackfill("+15551234", timestamp = 10_500L)
+
+        assertEquals(id, found?.id)
+    }
+
+    @Test
+    fun findUnmatchedForBackfillIgnoresRowsOutsideTheWindow() = runBlocking {
+        dao.insert(message().copy(sender = "+15551234", receivedStamp = 10_000L, systemSmsId = null))
+
+        val found = dao.findUnmatchedForBackfill("+15551234", timestamp = 20_000L)
+
+        assertEquals(null, found)
+    }
+
+    @Test
+    fun findUnmatchedForBackfillIgnoresRowsAlreadyLinked() = runBlocking {
+        dao.insert(message().copy(sender = "+15551234", receivedStamp = 10_000L, systemSmsId = 555L))
+
+        val found = dao.findUnmatchedForBackfill("+15551234", timestamp = 10_000L)
+
+        assertEquals(null, found)
+    }
+
+    @Test
+    fun getSystemSmsIdReturnsTheLinkedRowId() = runBlocking {
+        val id = dao.insert(message().copy(systemSmsId = 42L))
+
+        assertEquals(42L, dao.getSystemSmsId(id))
+    }
+
+    @Test
+    fun getSystemSmsIdsForSenderExcludesUnlinkedRows() = runBlocking {
+        dao.insert(message().copy(sender = "+15551234", systemSmsId = 1L))
+        dao.insert(message().copy(sender = "+15551234", systemSmsId = null))
+        dao.insert(message().copy(sender = "+15559999", systemSmsId = 2L))
+
+        val ids = dao.getSystemSmsIdsForSender("+15551234")
+
+        assertEquals(listOf(1L), ids)
+    }
 }

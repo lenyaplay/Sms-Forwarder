@@ -190,4 +190,59 @@ class MessageRepositoryTest {
         org.mockito.kotlin.verify(configStore).retryBaseIntervalSeconds()
         Unit
     }
+
+    /**
+     * Uses a real (not mocked) ContentResolver against a bogus systemSmsId -
+     * whether the default-SMS role is held or not on the test device, this
+     * real call either no-ops (id matches nothing) or throws SecurityException
+     * (role not held); either way, deleteFromSystemStore's catch must not
+     * prevent the Room deletion below from completing.
+     */
+    @Test
+    fun deleteMessageRemovesRoomRowEvenWhenSystemStoreDeleteFails() = runBlocking {
+        val id = messageDao.insert(
+            com.smsforwarder.gateway.data.local.db.MessageEntity(
+                sender = "+1", text = "to delete", sentStamp = 1L, receivedStamp = 1L, simSlot = 0,
+                deliveryStatus = DeliveryStatus.SENT, createdAt = 1L, systemSmsId = 999_999_999L,
+            )
+        )
+
+        repository.deleteMessage(id)
+
+        assertEquals(null, messageDao.getById(id))
+    }
+
+    @Test
+    fun deleteConversationRemovesRoomRowsEvenWhenSystemStoreDeleteFails() = runBlocking {
+        messageDao.insert(
+            com.smsforwarder.gateway.data.local.db.MessageEntity(
+                sender = "+15551234", text = "one", sentStamp = 1L, receivedStamp = 1L, simSlot = 0,
+                deliveryStatus = DeliveryStatus.SENT, createdAt = 1L, systemSmsId = 999_999_999L,
+            )
+        )
+        messageDao.insert(
+            com.smsforwarder.gateway.data.local.db.MessageEntity(
+                sender = "+15551234", text = "two", sentStamp = 1L, receivedStamp = 1L, simSlot = 0,
+                deliveryStatus = DeliveryStatus.SENT, createdAt = 2L, systemSmsId = 999_999_998L,
+            )
+        )
+
+        repository.deleteConversation("+15551234")
+
+        assertTrue(messageDao.observeThread("+15551234").first().isEmpty())
+    }
+
+    @Test
+    fun deleteMessageWithNoSystemSmsIdSkipsSystemStoreDeleteSilently() = runBlocking {
+        val id = messageDao.insert(
+            com.smsforwarder.gateway.data.local.db.MessageEntity(
+                sender = "+1", text = "never matched", sentStamp = 1L, receivedStamp = 1L, simSlot = 0,
+                deliveryStatus = DeliveryStatus.SENT, createdAt = 1L, systemSmsId = null,
+            )
+        )
+
+        repository.deleteMessage(id)
+
+        assertEquals(null, messageDao.getById(id))
+    }
 }

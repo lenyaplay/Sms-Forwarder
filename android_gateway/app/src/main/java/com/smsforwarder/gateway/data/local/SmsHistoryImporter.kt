@@ -50,6 +50,22 @@ internal fun Cursor.toMessageEntity(idCol: Int, addressCol: Int, bodyCol: Int, d
 }
 
 /**
+ * A row already stored by SmsDeliverReceiver/sendMessage (approximately
+ * matching sender+timestamp, see MessageDao.findUnmatchedForBackfill) gets
+ * its systemSmsId linked instead of being duplicated; a row with no local
+ * match (direct third-party writes to content://sms, or plain history import
+ * on first run) is inserted fresh, carrying the system row id from the start.
+ */
+private suspend fun MessageDao.upsertFromSystemProvider(rowId: Long, entity: MessageEntity) {
+    val existing = findUnmatchedForBackfill(entity.sender, entity.createdAt)
+    if (existing != null) {
+        update(existing.copy(systemSmsId = rowId))
+    } else {
+        insert(entity.copy(systemSmsId = rowId))
+    }
+}
+
+/**
  * Imports the system content://sms provider into our own Room DB - once in
  * full after this app first becomes the default SMS handler, and
  * incrementally afterwards for rows other apps write directly to that
@@ -89,7 +105,7 @@ open class SmsHistoryImporter @Inject constructor(
                         while (cursor.moveToNext()) {
                             val rowId = if (idCol >= 0) cursor.getLong(idCol) else 0L
                             if (rowId > maxRowId) maxRowId = rowId
-                            cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol)?.let { messageDao.insert(it) }
+                            cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol)?.let { messageDao.upsertFromSystemProvider(rowId, it) }
                         }
                     }
                     configStore.setLastSyncedSmsRowId(maxRowId)
@@ -126,7 +142,7 @@ open class SmsHistoryImporter @Inject constructor(
                         while (cursor.moveToNext()) {
                             val rowId = if (idCol >= 0) cursor.getLong(idCol) else since
                             if (rowId > maxRowId) maxRowId = rowId
-                            cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol)?.let { messageDao.insert(it) }
+                            cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol)?.let { messageDao.upsertFromSystemProvider(rowId, it) }
                         }
                     }
                     if (maxRowId != since) configStore.setLastSyncedSmsRowId(maxRowId)

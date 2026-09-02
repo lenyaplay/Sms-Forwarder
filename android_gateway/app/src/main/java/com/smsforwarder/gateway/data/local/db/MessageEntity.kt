@@ -19,4 +19,6 @@ data class MessageEntity(
     val deliveryStatus: DeliveryStatus,
     val createdAt: Long,
     val direction: MessageDirection = MessageDirection.IN,
+    /** Row id in content://sms, for exact deletion there. Null until SmsHistoryImporter backfills it. */
+    val systemSmsId: Long? = null,
 )

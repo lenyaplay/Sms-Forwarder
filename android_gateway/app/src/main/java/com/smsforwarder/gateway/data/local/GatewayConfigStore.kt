@@ -101,6 +101,20 @@ open class GatewayConfigStore(context: Context) {
         prefs.edit().putBoolean(KEY_FORWARDING_PAUSED, value).apply()
     }
 
+    /** Default false so an app update doesn't silently start deleting SMS for existing users. */
+    open fun deleteAfterForward(): Boolean = prefs.getBoolean(KEY_DELETE_AFTER_FORWARD, false)
+
+    open fun setDeleteAfterForward(value: Boolean) {
+        prefs.edit().putBoolean(KEY_DELETE_AFTER_FORWARD, value).apply()
+    }
+
+    /** Default true (hidden) so an app update doesn't silently start sending contact names to the backend. */
+    open fun hideContactNameInPayload(): Boolean = prefs.getBoolean(KEY_HIDE_CONTACT_NAME_IN_PAYLOAD, true)
+
+    open fun setHideContactNameInPayload(value: Boolean) {
+        prefs.edit().putBoolean(KEY_HIDE_CONTACT_NAME_IN_PAYLOAD, value).apply()
+    }
+
     /** Point removals, not .clear() - this prefs file also holds filter modes and import bookkeeping, which must survive a delivery reset untouched. */
     open fun resetDeliverySettings() {
         prefs.edit()
@@ -125,5 +139,7 @@ open class GatewayConfigStore(context: Context) {
         const val KEY_RETRY_BASE_INTERVAL_SECONDS = "retry_base_interval_seconds"
         const val KEY_RETRY_BACKOFF_POLICY = "retry_backoff_policy"
         const val KEY_FORWARDING_PAUSED = "forwarding_paused"
+        const val KEY_DELETE_AFTER_FORWARD = "delete_after_forward"
+        const val KEY_HIDE_CONTACT_NAME_IN_PAYLOAD = "hide_contact_name_in_payload"
     }
 }

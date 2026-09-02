@@ -1,6 +1,8 @@
 package com.smsforwarder.gateway.data.repository
 
 import android.content.Context
+import android.provider.Telephony
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.NetworkType
@@ -57,11 +59,35 @@ open class MessageRepository @Inject constructor(
      * otherwise cancel the delete mid-flight and leave it half-done.
      */
     open suspend fun deleteConversation(sender: String) = withContext(NonCancellable) {
+        val systemSmsIds = messageDao.getSystemSmsIdsForSender(sender)
         messageDao.deleteConversationAndMeta(sender)
+        systemSmsIds.forEach { deleteFromSystemStore(it) }
     }
 
     open suspend fun deleteMessage(id: Long) = withContext(NonCancellable) {
+        val systemSmsId = messageDao.getSystemSmsId(id)
         messageDao.deleteById(id)
+        deleteFromSystemStore(systemSmsId)
+    }
+
+    /**
+     * This app holds the default-SMS role, which grants write access to
+     * content://sms that ordinary apps don't have - both manual deletion and
+     * the "delete after forward" setting use this same path (spec 0018), so
+     * deleting through the UI now also removes the SMS from the system
+     * "Messages" app, not just this app's own Room copy.
+     *
+     * Failure (e.g. the role was lost - a real OEM quirk documented
+     * elsewhere in this project) is logged, never propagated - the Room
+     * deletion already succeeded and must not appear to fail because of it.
+     */
+    private fun deleteFromSystemStore(systemSmsId: Long?) {
+        if (systemSmsId == null) return
+        try {
+            context.contentResolver.delete(Telephony.Sms.CONTENT_URI, "${Telephony.Sms._ID} = ?", arrayOf(systemSmsId.toString()))
+        } catch (e: SecurityException) {
+            Log.w("MessageRepository", "content://sms delete failed for id=$systemSmsId", e)
+        }
     }
 
     /**
