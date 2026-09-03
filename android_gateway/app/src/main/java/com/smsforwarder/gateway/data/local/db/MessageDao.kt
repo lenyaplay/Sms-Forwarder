@@ -41,13 +41,28 @@ interface MessageDao {
     @Query("SELECT * FROM messages ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<MessageEntity>>
 
+    // Two real messages from the same sender can share the exact same createdAt
+    // (batch-delivered content://sms rows after the device was offline) - a plain
+    // `createdAt = MAX(createdAt)` WHERE clause then matches BOTH rows instead of
+    // picking one, producing two conversation rows for one sender (crashes the
+    // LazyColumn's `key = { it.sender }` in ConversationsScreen). GROUP BY sender
+    // guarantees exactly one row per sender; the correlated subqueries pick that
+    // row's own text/deliveryStatus/direction, using `id DESC` as a tiebreaker for
+    // the (rare) case of two messages tied on createdAt too. (Room's compile-time
+    // SQL validator doesn't parse window functions/subqueries-in-FROM, so ROW_NUMBER
+    // isn't an option here.)
     @Query(
         """
-        SELECT m.sender, m.text, m.createdAt, m.deliveryStatus, m.direction FROM messages AS m
+        SELECT m.sender,
+               (SELECT text FROM messages WHERE sender = m.sender ORDER BY createdAt DESC, id DESC LIMIT 1) AS text,
+               MAX(m.createdAt) AS createdAt,
+               (SELECT deliveryStatus FROM messages WHERE sender = m.sender ORDER BY createdAt DESC, id DESC LIMIT 1) AS deliveryStatus,
+               (SELECT direction FROM messages WHERE sender = m.sender ORDER BY createdAt DESC, id DESC LIMIT 1) AS direction
+        FROM messages AS m
         LEFT JOIN conversation_meta AS cm ON cm.sender = m.sender
-        WHERE m.createdAt = (SELECT MAX(createdAt) FROM messages WHERE sender = m.sender)
-        AND COALESCE(cm.isArchived, 0) = :archived
-        ORDER BY m.createdAt DESC
+        WHERE COALESCE(cm.isArchived, 0) = :archived
+        GROUP BY m.sender
+        ORDER BY createdAt DESC
         """
     )
     fun observeConversations(archived: Boolean): Flow<List<ConversationEntity>>

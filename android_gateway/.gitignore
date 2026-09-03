@@ -1,6 +1,8 @@
 *.iml
 .gradle/
 /local.properties
+/keystore/
+/keystore.properties
 /.idea/
 .DS_Store
 /build/
@@ -8,5 +10,13 @@
 .externalNativeBuild/
 .cxx/
 app/build/
+baselineprofile/build/
 gradle/wrapper/gradle-wrapper.jar
 window_dump.xml
+
+# Kotlin/KSP incremental-compilation cache (regenerated on every build)
+.kotlin/
+
+# Ad-hoc device screenshots/logs taken during debugging - never repo content
+/screenshots/
+*.log

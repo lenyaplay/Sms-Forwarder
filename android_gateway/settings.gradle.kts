@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "SMS Forwarder Gateway"
 include(":app")
+include(":baselineprofile")

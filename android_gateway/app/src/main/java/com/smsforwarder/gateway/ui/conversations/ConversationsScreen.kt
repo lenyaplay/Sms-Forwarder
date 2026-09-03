@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -286,11 +287,11 @@ private fun ConversationRow(
             }
         },
     ) {
-        Card(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp)
                 .heightIn(min = 48.dp)
+                .background(MaterialTheme.colorScheme.surface)
                 .clickable(onClick = { onOpenThread(conversation.sender, null) })
                 .semantics(mergeDescendants = true) {}
                 .testTag(ConversationsTestTags.row(conversation.sender)),
@@ -305,6 +306,7 @@ private fun ConversationRow(
                 }
                 Text(text = formatConversationTime(conversation.createdAt), style = MaterialTheme.typography.labelSmall)
             }
+            HorizontalDivider()
         }
     }
 }

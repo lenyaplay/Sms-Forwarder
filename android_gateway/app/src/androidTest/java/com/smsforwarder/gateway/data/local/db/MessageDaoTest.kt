@@ -103,6 +103,22 @@ class MessageDaoTest {
     }
 
     @Test
+    fun observeConversationsCollapsesToOneRowWhenTwoMessagesFromTheSameSenderShareCreatedAt() = runBlocking {
+        // Real content://sms rows can share the exact same createdAt millisecond
+        // (batch-delivered after the device was offline) - a plain
+        // `createdAt = MAX(createdAt)` filter matches BOTH rows instead of one,
+        // producing two ConversationEntity rows for the same sender, which
+        // crashes ConversationsScreen's LazyColumn (`key = { it.sender }`).
+        dao.insert(message().copy(sender = "RSCHS", text = "first part", createdAt = 500L))
+        dao.insert(message().copy(sender = "RSCHS", text = "second part", createdAt = 500L))
+
+        val conversations = dao.observeConversations(archived = false).first()
+
+        assertEquals(1, conversations.size)
+        assertEquals("RSCHS", conversations[0].sender)
+    }
+
+    @Test
     fun observeThreadReturnsOnlyMessagesFromThatSenderOldestFirst() = runBlocking {
         dao.insert(message().copy(sender = "+15551234", text = "first", createdAt = 1L))
         dao.insert(message().copy(sender = "+15559999", text = "unrelated", createdAt = 2L))
