@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
@@ -64,6 +64,7 @@ object FilterRulesTestTags {
     fun enabledSwitch(id: Long) = "filter_rules_enabled_switch_$id"
     fun moveUpButton(id: Long) = "filter_rules_move_up_$id"
     fun moveDownButton(id: Long) = "filter_rules_move_down_$id"
+    fun deleteButton(id: Long) = "filter_rules_delete_$id"
 }
 
 @Composable
@@ -94,7 +95,7 @@ fun FilterRulesContent(
                 title = { Text("Фильтрация SMS") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
                     }
                 },
             )
@@ -197,6 +198,10 @@ private fun FilterRuleRow(
     onMoveDown: () -> Unit,
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
+        // Default (0.5) triggers on a fairly short drag - raised so an accidental
+        // sideways scroll doesn't fire delete; the IconButton below is the
+        // non-gesture equivalent (swipe-to-dismiss has no built-in a11y action).
+        positionalThreshold = { totalDistance -> totalDistance * 0.75f },
         confirmValueChange = { value ->
             when (value) {
                 SwipeToDismissBoxValue.EndToStart -> onDeleteRequested()
@@ -255,6 +260,12 @@ private fun FilterRuleRow(
                     ) {
                         Icon(Icons.Default.ArrowDownward, contentDescription = "Переместить ниже")
                     }
+                }
+                IconButton(
+                    onClick = onDeleteRequested,
+                    modifier = Modifier.testTag(FilterRulesTestTags.deleteButton(rule.id)),
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = "Удалить правило", tint = MaterialTheme.colorScheme.error)
                 }
                 Switch(
                     checked = rule.enabled,

@@ -1,7 +1,9 @@
 package com.smsforwarder.gateway.ui.conversations
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +22,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
@@ -61,6 +65,8 @@ object ConversationsTestTags {
     const val ARCHIVE_TOGGLE = "conversations_archive_toggle"
     const val RESEND_ALL_FAILED = "conversations_resend_all_failed"
     const val SEARCH_RESULTS_LIST = "conversations_search_results_list"
+    const val ROW_MENU_ARCHIVE = "conversations_row_menu_archive"
+    const val ROW_MENU_DELETE = "conversations_row_menu_delete"
     fun row(sender: String) = "conversations_row_$sender"
 }
 
@@ -247,7 +253,7 @@ fun ConversationsContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationRow(
     conversation: ConversationUi,
@@ -256,7 +262,13 @@ private fun ConversationRow(
     onArchiveToggle: (String) -> Unit,
     onDeleteRequested: (String) -> Unit,
 ) {
+    var showMenu by remember { mutableStateOf(false) }
     val dismissState = rememberSwipeToDismissBoxState(
+        // Default (0.5) reacts to a fairly short drag - easy to trigger by accident
+        // while scrolling diagonally. Raised so only a deliberate, most-of-the-row
+        // swipe (like system Messages/Gmail) commits the action; a long-press menu
+        // below is the non-gesture equivalent for TalkBack users.
+        positionalThreshold = { totalDistance -> totalDistance * 0.75f },
         confirmValueChange = { value ->
             when (value) {
                 SwipeToDismissBoxValue.StartToEnd -> {
@@ -292,7 +304,13 @@ private fun ConversationRow(
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
                 .background(MaterialTheme.colorScheme.surface)
-                .clickable(onClick = { onOpenThread(conversation.sender, null) })
+                .combinedClickable(
+                    onClick = { onOpenThread(conversation.sender, null) },
+                    // Non-gesture equivalent of the swipe actions above - TalkBack
+                    // users (and anyone who doesn't want to swipe) can long-press
+                    // instead, since swipe-to-dismiss has no built-in a11y action.
+                    onLongClick = { showMenu = true },
+                )
                 .semantics(mergeDescendants = true) {}
                 .testTag(ConversationsTestTags.row(conversation.sender)),
         ) {
@@ -307,6 +325,24 @@ private fun ConversationRow(
                 Text(text = formatConversationTime(conversation.createdAt), style = MaterialTheme.typography.labelSmall)
             }
             HorizontalDivider()
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text(if (isArchivedView) "Показать во входящих" else "Архивировать") },
+                    onClick = {
+                        showMenu = false
+                        onArchiveToggle(conversation.sender)
+                    },
+                    modifier = Modifier.testTag(ConversationsTestTags.ROW_MENU_ARCHIVE),
+                )
+                DropdownMenuItem(
+                    text = { Text("Удалить") },
+                    onClick = {
+                        showMenu = false
+                        onDeleteRequested(conversation.sender)
+                    },
+                    modifier = Modifier.testTag(ConversationsTestTags.ROW_MENU_DELETE),
+                )
+            }
         }
     }
 }
