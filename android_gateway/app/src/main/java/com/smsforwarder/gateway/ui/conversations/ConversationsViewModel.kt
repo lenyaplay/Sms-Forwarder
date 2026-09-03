@@ -1,5 +1,7 @@
 package com.smsforwarder.gateway.ui.conversations
 
+import android.os.SystemClock
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.smsforwarder.gateway.data.local.ContactNameResolver
@@ -66,6 +68,15 @@ class ConversationsViewModel @Inject constructor(
     // with synchronized rather than assuming a single writer.
     private val contactNameCache = mutableMapOf<String, String?>()
 
+    // Spec 0026 diagnostics: localizes where cold-start time to the first real
+    // conversations-list frame goes (Room query/Flow dispatch vs contact resolution) -
+    // always-on plain Log.i (unlike PerfMonitor's timers, not gated behind the
+    // diagnostics toggle, since it's cheap - two nanoTime() reads and one log line
+    // per VM lifetime, not per frame) so it's available without extra setup during
+    // spec 0026's investigation. Not surfaced in UiState.
+    private val createdAtNanos = System.nanoTime()
+    private var firstEmissionLogged = false
+
     init {
         viewModelScope.launch {
             historyImporter.isImporting.collect { isImporting ->
@@ -118,6 +129,9 @@ class ConversationsViewModel @Inject constructor(
         conversationsJob?.cancel()
         conversationsJob = viewModelScope.launch {
             repository.observeConversations(archived).distinctUntilChanged().collect { conversations ->
+                val isFirstEmission = !firstEmissionLogged
+                val emissionReceivedAtNanos = System.nanoTime()
+                val resolveStartNanos = System.nanoTime()
                 val conversationsUi = withContext(Dispatchers.IO) {
                     conversations.map { entity ->
                         ConversationUi(
@@ -132,8 +146,21 @@ class ConversationsViewModel @Inject constructor(
                         )
                     }
                 }
+                if (isFirstEmission) {
+                    val sinceCreatedMs = (emissionReceivedAtNanos - createdAtNanos) / 1_000_000
+                    val resolveMs = (System.nanoTime() - resolveStartNanos) / 1_000_000
+                    Log.i(
+                        TAG,
+                        "spec0026 first_emission_since_vm_created_ms=$sinceCreatedMs contact_resolve_ms=$resolveMs rows=${conversations.size}",
+                    )
+                }
+                firstEmissionLogged = true
                 _uiState.update { it.copy(conversations = conversationsUi, hasLoadedOnce = true) }
             }
         }
+    }
+
+    private companion object {
+        const val TAG = "ConversationsViewModel"
     }
 }

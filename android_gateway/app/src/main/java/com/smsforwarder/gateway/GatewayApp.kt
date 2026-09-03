@@ -43,5 +43,16 @@ class GatewayApp : Application(), Configuration.Provider {
                 }
             },
         )
+
+        // Spec 0026: background warm-up in Application.onCreate (both a Room DB
+        // open AND, alone, just the RoleManager check) was tried and measured via
+        // `adb shell am start -W` on a real cold process (TECNO LI9) - both made
+        // TotalTime WORSE, not better: baseline ~339ms -> ~465ms with DB+role
+        // warm-up -> ~401ms with role warm-up alone. A genuinely cold process has
+        // very little scheduling slack; dispatching ANY background coroutine here,
+        // even a single Binder call, measurably competes with MainActivity/
+        // Compose's own class-loading and CPU time on this device. Not used -
+        // DefaultSmsAppCache.isDefault() falls back to computing synchronously,
+        // identical to the pre-spec-0026 behavior.
     }
 }
