@@ -19,4 +19,5 @@ window_dump.xml
 
 # Ad-hoc device screenshots/logs taken during debugging - never repo content
 /screenshots/
+/tmp/
 *.log

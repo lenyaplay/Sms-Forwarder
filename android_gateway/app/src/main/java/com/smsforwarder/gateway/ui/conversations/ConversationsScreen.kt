@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
@@ -54,10 +55,12 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.smsforwarder.gateway.ui.common.AVATAR_SIZE
 import com.smsforwarder.gateway.ui.common.ConfirmDialog
 import com.smsforwarder.gateway.ui.common.ContactAvatar
 import java.text.SimpleDateFormat
@@ -170,6 +173,7 @@ fun ConversationsScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { showNewMessageDialog = true },
+                shape = CircleShape,
                 modifier = Modifier.testTag(ConversationsTestTags.NEW_MESSAGE_FAB),
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Новое сообщение")
@@ -181,6 +185,7 @@ fun ConversationsScreen(
                 value = uiState.query,
                 onValueChange = viewModel::onQueryChange,
                 label = { Text("Поиск по переписке") },
+                shape = MaterialTheme.shapes.small,
                 trailingIcon = {
                     if (uiState.query.isNotEmpty()) {
                         IconButton(
@@ -339,10 +344,11 @@ private fun ConversationRow(
     var showMenu by remember { mutableStateOf(false) }
     val dismissState = rememberSwipeToDismissBoxState(
         // Default (0.5) reacts to a fairly short drag - easy to trigger by accident
-        // while scrolling diagonally. Raised so only a deliberate, most-of-the-row
-        // swipe (like system Messages/Gmail) commits the action; a long-press menu
-        // below is the non-gesture equivalent for TalkBack users.
-        positionalThreshold = { totalDistance -> totalDistance * 0.75f },
+        // while scrolling diagonally. Raised (0.75 -> 0.85, per product owner
+        // feedback that 0.75 still triggered too easily) so only a near-full-row
+        // swipe commits the action; a long-press menu below is the non-gesture
+        // equivalent for TalkBack users.
+        positionalThreshold = { totalDistance -> totalDistance * 0.85f },
         confirmValueChange = { value ->
             when (value) {
                 SwipeToDismissBoxValue.StartToEnd -> {
@@ -438,11 +444,24 @@ private fun ConversationRowContent(
             ContactAvatar(displayName = displayName, photoUri = photoUri, sender = sender)
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(text = displayName, style = MaterialTheme.typography.titleMedium)
-                Text(text = text, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Text(text = timestampText, style = MaterialTheme.typography.labelSmall)
         }
-        HorizontalDivider()
+        // Indent matches the row's own layout above: 12dp row padding + AVATAR_SIZE +
+        // 12dp gap to the text column, so the divider starts under the text, not the
+        // avatar - reusing ContactAvatar's own size constant rather than a second,
+        // independently-drifting 40.dp+12dp+12dp magic number here.
+        HorizontalDivider(
+            modifier = Modifier.padding(start = 12.dp + AVATAR_SIZE + 12.dp),
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+        )
     }
 }
 

@@ -2,6 +2,7 @@ package com.smsforwarder.gateway.ui.thread
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,22 +12,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.SimCard
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -59,7 +65,7 @@ object ThreadTestTags {
     const val DELETE_CONVERSATION_BUTTON = "thread_delete_conversation_button"
     const val DELETE_MESSAGE_MENU_ITEM = "thread_delete_message_menu_item"
     fun retryButton(id: Long) = "thread_retry_button_$id"
-    fun simChip(subscriptionId: Int) = "thread_sim_chip_$subscriptionId"
+    fun simMenuItem(subscriptionId: Int) = "thread_sim_menu_item_$subscriptionId"
     fun bubble(id: Long) = "thread_bubble_$id"
 }
 
@@ -151,24 +157,6 @@ fun ThreadContent(uiState: ThreadUiState, actions: ThreadActions, modifier: Modi
                 )
             }
         }
-        if (uiState.showSimSelector) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
-                    .testTag(ThreadTestTags.SIM_SELECTOR),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                uiState.availableSims.forEach { sim ->
-                    FilterChip(
-                        selected = sim.subscriptionId == uiState.selectedSubscriptionId,
-                        onClick = { actions.onSelectSim(sim.subscriptionId) },
-                        label = { Text(sim.displayName) },
-                        modifier = Modifier.testTag(ThreadTestTags.simChip(sim.subscriptionId)),
-                    )
-                }
-            }
-        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -177,17 +165,69 @@ fun ThreadContent(uiState: ThreadUiState, actions: ThreadActions, modifier: Modi
                 value = uiState.draft,
                 onValueChange = actions::onDraftChange,
                 enabled = !uiState.isSending,
+                shape = MaterialTheme.shapes.small,
+                // Replaces the old FilterChip row that used to sit above the draft
+                // field (spec 0028 fixed its selected-chip fill color, but the product
+                // owner then flagged, live on-device, that the row itself still read as
+                // a solid dark bar over the last messages) - moving SIM selection into
+                // the field's own trailing slot keeps it compact and inside the field's
+                // bounds instead of a separate full-width element.
+                trailingIcon = {
+                    if (uiState.showSimSelector) {
+                        var showSimMenu by remember { mutableStateOf(false) }
+                        val selectedSim = uiState.availableSims.firstOrNull { it.subscriptionId == uiState.selectedSubscriptionId }
+                        Box {
+                            Column(
+                                modifier = Modifier
+                                    .clickable { showSimMenu = true }
+                                    .padding(4.dp)
+                                    .testTag(ThreadTestTags.SIM_SELECTOR),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Icon(Icons.Default.SimCard, contentDescription = "Выбор SIM")
+                                selectedSim?.let {
+                                    Text(
+                                        text = "SIM ${it.slotIndex + 1}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                    )
+                                }
+                            }
+                            DropdownMenu(expanded = showSimMenu, onDismissRequest = { showSimMenu = false }) {
+                                uiState.availableSims.forEach { sim ->
+                                    DropdownMenuItem(
+                                        text = { Text("SIM ${sim.slotIndex + 1} · ${sim.displayName}") },
+                                        onClick = {
+                                            actions.onSelectSim(sim.subscriptionId)
+                                            showSimMenu = false
+                                        },
+                                        leadingIcon = {
+                                            RadioButton(
+                                                selected = sim.subscriptionId == uiState.selectedSubscriptionId,
+                                                onClick = null,
+                                            )
+                                        },
+                                        modifier = Modifier.testTag(ThreadTestTags.simMenuItem(sim.subscriptionId)),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
                 modifier = Modifier.weight(1f).testTag(ThreadTestTags.DRAFT_FIELD),
             )
             if (uiState.isSending) {
                 CircularProgressIndicator(modifier = Modifier.padding(start = 12.dp).heightIn(24.dp))
             } else {
-                androidx.compose.material3.Button(
+                FilledIconButton(
                     onClick = actions::onSend,
                     enabled = uiState.canSend,
-                    modifier = Modifier.testTag(ThreadTestTags.SEND_BUTTON),
+                    shape = CircleShape,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .size(48.dp)
+                        .testTag(ThreadTestTags.SEND_BUTTON),
                 ) {
-                    Text("Отправить")
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
                 }
             }
         }
@@ -213,7 +253,7 @@ private fun MessageBubble(message: MessageEntity, onRetry: (Long) -> Unit, onDel
                     shape = MaterialTheme.shapes.medium,
                 )
                 .combinedClickable(onClick = {}, onLongClick = { showMenu = true })
-                .padding(10.dp)
+                .padding(12.dp)
                 .testTag(ThreadTestTags.bubble(message.id)),
         ) {
             Text(

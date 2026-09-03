@@ -25,7 +25,10 @@ object ContactAvatarTestTags {
     const val FALLBACK_ICON = "contact_avatar_fallback_icon"
 }
 
-private val AVATAR_SIZE = 40.dp
+// internal, not private: ConversationRowContent (ConversationsScreen.kt) reuses this
+// to align its divider's start indent with the avatar's actual width, rather than
+// duplicating the 40.dp as a second magic number that could silently drift out of sync.
+internal val AVATAR_SIZE = 40.dp
 
 // Fixed, deterministic palette (not MaterialTheme.colorScheme.primary etc. directly -
 // a single shared hue for every sender would defeat the point of a color cue) so the

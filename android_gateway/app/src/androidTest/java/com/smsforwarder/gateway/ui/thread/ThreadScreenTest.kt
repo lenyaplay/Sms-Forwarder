@@ -3,12 +3,21 @@ package com.smsforwarder.gateway.ui.thread
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
+import com.smsforwarder.gateway.data.local.SimOption
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.MessageDirection
 import com.smsforwarder.gateway.data.local.db.MessageEntity
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -90,5 +99,104 @@ class ThreadScreenTest {
         // the animated path is allowed to take more than one frame, so this
         // asserts the eventual (idle-settled) end state, not immediacy.
         composeRule.onNodeWithTag(ThreadTestTags.bubble(6L)).assertIsDisplayed()
+    }
+
+    // Spec 0028: send button is now an icon (Icons.AutoMirrored.Filled.Send) inside a
+    // circular FilledIconButton, not a text Button - covers what a Compose test can
+    // actually assert (testTag/click/enabled state/touch target size), since Compose's
+    // test APIs have no way to read back the drawn shape/color without a snapshot
+    // testing framework (not present in this project - documented in spec 0028 as a
+    // known limitation, verified instead by code review + live device check).
+    @Test
+    fun sendButtonIsAtLeastFortyEightDpAndInvokesOnSendWhenEnabled() {
+        var sendCount = 0
+        val actions = object : ThreadActions {
+            override fun onDraftChange(value: String) {}
+            override fun onSend() { sendCount++ }
+            override fun onRetry(messageId: Long) {}
+            override fun onSelectSim(subscriptionId: Int) {}
+            override fun onDeleteMessage(messageId: Long) {}
+            override fun onDeleteConversation() {}
+        }
+        composeRule.setContent {
+            ThreadContent(
+                uiState = ThreadUiState(sender = "+15551234", draft = "hello", messages = emptyList()),
+                actions = actions,
+            )
+        }
+
+        composeRule.onNodeWithTag(ThreadTestTags.SEND_BUTTON)
+            .assertIsEnabled()
+            .assertWidthIsAtLeast(48.dp)
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
+
+        assertTrue(sendCount == 1)
+    }
+
+    @Test
+    fun sendButtonIsDisabledWhenDraftIsBlank() {
+        composeRule.setContent {
+            ThreadContent(
+                uiState = ThreadUiState(sender = "+15551234", draft = "", messages = emptyList()),
+                actions = noopActions,
+            )
+        }
+
+        composeRule.onNodeWithTag(ThreadTestTags.SEND_BUTTON).assertIsNotEnabled()
+    }
+
+    // Replaces the old FilterChip row (which read on-device as a solid dark bar over
+    // the last messages, per product owner live feedback) with a compact trailing icon
+    // inside the draft field's own trailingIcon slot - covers that the icon opens a
+    // popup with one item per SIM and that picking one delegates to onSelectSim.
+    @Test
+    fun simSelectorIconOpensMenuAndSelectingASimDelegatesToOnSelectSim() {
+        var selected: Int? = null
+        val actions = object : ThreadActions {
+            override fun onDraftChange(value: String) {}
+            override fun onSend() {}
+            override fun onRetry(messageId: Long) {}
+            override fun onSelectSim(subscriptionId: Int) { selected = subscriptionId }
+            override fun onDeleteMessage(messageId: Long) {}
+            override fun onDeleteConversation() {}
+        }
+        val sims = listOf(
+            SimOption(subscriptionId = 1, slotIndex = 0, displayName = "Tinkoff"),
+            SimOption(subscriptionId = 2, slotIndex = 1, displayName = "YOTA"),
+        )
+        composeRule.setContent {
+            ThreadContent(
+                uiState = ThreadUiState(
+                    sender = "+15551234",
+                    messages = emptyList(),
+                    availableSims = sims,
+                    selectedSubscriptionId = 1,
+                ),
+                actions = actions,
+            )
+        }
+
+        composeRule.onNodeWithTag(ThreadTestTags.SIM_SELECTOR).assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag(ThreadTestTags.simMenuItem(2)).assertIsDisplayed().performClick()
+
+        assertEquals(2, selected)
+    }
+
+    @Test
+    fun simSelectorIsNotShownWithOnlyOneSim() {
+        composeRule.setContent {
+            ThreadContent(
+                uiState = ThreadUiState(
+                    sender = "+15551234",
+                    messages = emptyList(),
+                    availableSims = listOf(SimOption(subscriptionId = 1, slotIndex = 0, displayName = "Tinkoff")),
+                    selectedSubscriptionId = 1,
+                ),
+                actions = noopActions,
+            )
+        }
+
+        composeRule.onNodeWithTag(ThreadTestTags.SIM_SELECTOR).assertDoesNotExist()
     }
 }

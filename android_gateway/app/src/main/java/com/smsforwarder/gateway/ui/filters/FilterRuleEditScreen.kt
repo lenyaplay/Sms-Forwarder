@@ -13,6 +13,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -83,6 +84,7 @@ fun FilterRuleEditContent(uiState: FilterRuleEditUiState, actions: FilterRuleEdi
                 onValueChange = actions::onSenderPatternChange,
                 label = { Text("Отправитель (пусто = любой)") },
                 isError = uiState.senderPatternError != null,
+                shape = MaterialTheme.shapes.small,
                 modifier = Modifier.fillMaxWidth().testTag(FilterRuleEditTestTags.SENDER_FIELD),
             )
             uiState.senderPatternError?.let {
@@ -108,6 +110,7 @@ fun FilterRuleEditContent(uiState: FilterRuleEditUiState, actions: FilterRuleEdi
                 onValueChange = actions::onContentPatternChange,
                 label = { Text("Текст сообщения (пусто = любой)") },
                 isError = uiState.contentPatternError != null,
+                shape = MaterialTheme.shapes.small,
                 modifier = Modifier.fillMaxWidth().testTag(FilterRuleEditTestTags.CONTENT_FIELD),
             )
             uiState.contentPatternError?.let {

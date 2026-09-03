@@ -94,6 +94,7 @@ fun DeliveryContent(uiState: DeliveryUiState, actions: DeliveryActions, onBack: 
                 value = uiState.serverUrl,
                 onValueChange = actions::onServerUrlChange,
                 label = { Text("Адрес сервера") },
+                shape = MaterialTheme.shapes.small,
                 modifier = Modifier.fillMaxWidth().testTag(DeliveryTestTags.SERVER_URL_FIELD),
             )
             Text(
@@ -109,6 +110,7 @@ fun DeliveryContent(uiState: DeliveryUiState, actions: DeliveryActions, onBack: 
                     value = uiState.uploadToken,
                     onValueChange = actions::onUploadTokenChange,
                     label = { Text("Upload token") },
+                    shape = MaterialTheme.shapes.small,
                     modifier = Modifier.weight(1f).testTag(DeliveryTestTags.UPLOAD_TOKEN_FIELD),
                 )
                 TextButton(
@@ -135,6 +137,7 @@ fun DeliveryContent(uiState: DeliveryUiState, actions: DeliveryActions, onBack: 
                 onValueChange = actions::onMaxAttemptsChange,
                 label = { Text("Максимум попыток (1–50)") },
                 isError = uiState.maxAttemptsError != null,
+                shape = MaterialTheme.shapes.small,
                 modifier = Modifier.fillMaxWidth().testTag(DeliveryTestTags.MAX_ATTEMPTS_FIELD),
             )
             uiState.maxAttemptsError?.let {
@@ -146,6 +149,7 @@ fun DeliveryContent(uiState: DeliveryUiState, actions: DeliveryActions, onBack: 
                 onValueChange = actions::onBaseIntervalSecondsChange,
                 label = { Text("Интервал между попытками, сек (10–3600)") },
                 isError = uiState.baseIntervalSecondsError != null,
+                shape = MaterialTheme.shapes.small,
                 modifier = Modifier.fillMaxWidth().testTag(DeliveryTestTags.BASE_INTERVAL_FIELD),
             )
             uiState.baseIntervalSecondsError?.let {

@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso
 import androidx.test.platform.app.InstrumentationRegistry
@@ -128,5 +130,27 @@ class DeliveryResetActivityTest {
         }
         composeRule.onNodeWithTag(ConversationsTestTags.SEARCH_CLEAR_BUTTON).assertDoesNotExist()
         assertTrue("Activity must still be alive throughout", !composeRule.activity.isFinishing)
+    }
+
+    // Spec 0028: enableEdgeToEdge() makes the status bar transparent so the real
+    // screen background shows through it, but that only works correctly if content
+    // isn't drawn UNDER it - Scaffold applies default contentWindowInsets on its own,
+    // but this proves it end to end on a real Activity/window rather than trusting
+    // that Scaffold's defaults are actually in effect here.
+    @Test
+    fun conversationsTopBarIsNotDrawnUnderTheStatusBarAfterEdgeToEdge() {
+        val statusBarInsetPx = ViewCompat.getRootWindowInsets(composeRule.activity.window.decorView)
+            ?.getInsets(WindowInsetsCompat.Type.statusBars())
+            ?.top ?: 0
+
+        val topBarTop = composeRule.onNodeWithTag(ConversationsTestTags.SETTINGS_BUTTON)
+            .fetchSemanticsNode()
+            .boundsInRoot
+            .top
+
+        assertTrue(
+            "Settings icon top ($topBarTop px) must be at or below the status bar inset ($statusBarInsetPx px)",
+            topBarTop >= statusBarInsetPx - 1f, // -1f: sub-pixel rounding tolerance
+        )
     }
 }

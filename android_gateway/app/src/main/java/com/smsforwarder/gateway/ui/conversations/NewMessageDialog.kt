@@ -1,6 +1,7 @@
 package com.smsforwarder.gateway.ui.conversations
 
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,6 +29,7 @@ fun NewMessageDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
                 value = number,
                 onValueChange = { number = it },
                 label = { Text("Номер телефона") },
+                shape = MaterialTheme.shapes.small,
                 modifier = androidx.compose.ui.Modifier.testTag(NewMessageDialogTestTags.NUMBER_FIELD),
             )
         },

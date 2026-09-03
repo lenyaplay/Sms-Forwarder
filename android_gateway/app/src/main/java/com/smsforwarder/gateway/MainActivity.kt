@@ -8,6 +8,7 @@ import android.provider.Telephony
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -80,6 +81,12 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Milestone 26/spec 0028: makes system bars transparent so the real screen
+        // background shows through (no more purple colorPrimaryDark seam under the
+        // notification shade) - must run before setContent(). Every screen already
+        // uses Scaffold, which applies its own default contentWindowInsets, so no
+        // per-screen insets handling is needed beyond this.
+        enableEdgeToEdge()
         openSender.value = openSenderRequest(intent?.getStringExtra(EXTRA_OPEN_SENDER))
         setContent {
             // attachTo needs a DecorView, which setContent() itself creates -
