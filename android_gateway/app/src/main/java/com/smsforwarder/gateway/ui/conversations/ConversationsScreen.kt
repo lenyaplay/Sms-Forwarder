@@ -1,5 +1,6 @@
 package com.smsforwarder.gateway.ui.conversations
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,6 +41,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,9 +50,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.smsforwarder.gateway.ui.common.ConfirmDialog
 import com.smsforwarder.gateway.ui.common.ContactAvatar
@@ -85,6 +92,49 @@ fun ConversationsScreen(
     var showNewMessageDialog by remember { mutableStateOf(false) }
     var pendingDeleteSender by remember { mutableStateOf<String?>(null) }
     var showResendAllConfirm by remember { mutableStateOf(false) }
+
+    // Keeping the OutlinedTextField Compose-focused after the keyboard is dismissed
+    // (whichever way - back press, tapping outside, the system) left its cursor
+    // blinking (and the field still silently accepting typed input) with no visible
+    // keyboard - confirmed live via adb: `focusManager.clearFocus()` alone, called
+    // from BackHandler, did NOT actually detach the field's input connection.
+    // Driven off real IME visibility instead, via the classic
+    // ViewTreeObserver+WindowInsetsCompat approach rather than Compose's own
+    // `WindowInsets.isImeVisible` - this app has no edge-to-edge/WindowCompat setup,
+    // so Compose's own ime insets never update and that composable stays stuck at
+    // its initial value (also confirmed live: no-op). The View-level query below
+    // reads real window insets state directly and doesn't need edge-to-edge.
+    val focusManager = LocalFocusManager.current
+    val view = LocalView.current
+    var imeVisible by remember { mutableStateOf(false) }
+    DisposableEffect(view) {
+        val listener = android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            imeVisible = ViewCompat.getRootWindowInsets(view)?.isVisible(WindowInsetsCompat.Type.ime()) ?: false
+        }
+        view.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        onDispose { view.viewTreeObserver.removeOnGlobalLayoutListener(listener) }
+    }
+    LaunchedEffect(imeVisible) {
+        if (!imeVisible) focusManager.clearFocus(force = true)
+    }
+
+    // Without this, system back while searching closes the whole app (Conversations
+    // is the start destination, no back stack to pop) - jarring mid-search.
+    //
+    // No explicit "dismiss focus first" step here, even though the product ask was
+    // "first back removes focus, second clears the query": verified live (real
+    // KEYCODE_BACK via adb, not just the instrumented test) that when the IME is
+    // actually shown, Android itself consumes the very first back to hide the
+    // keyboard - it never reaches this callback at all, and the field's Compose
+    // focus survives that regardless of what this code does (clearFocus() doesn't
+    // reliably flip it either, per instrumented-test observation). So this handler
+    // clearing the query on its very first invocation already gives the intended
+    // 2-press feel: press 1 hides the keyboard (OS-level, free), press 2 lands here
+    // and clears the query. Adding our own extra "focus-only" step on top of that
+    // made it a 3-press flow instead, confirmed with real back-key events.
+    BackHandler(enabled = uiState.isSearching) {
+        viewModel.onQueryChange("")
+    }
 
     Scaffold(
         topBar = {

@@ -1,13 +1,16 @@
 package com.smsforwarder.gateway
 
 import android.content.Context
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.espresso.Espresso
 import androidx.test.platform.app.InstrumentationRegistry
 import com.smsforwarder.gateway.data.local.GatewayConfigStore
 import com.smsforwarder.gateway.data.local.db.FilterMode
@@ -100,5 +103,30 @@ class DeliveryResetActivityTest {
 
         assertEquals(FilterMode.WHITELIST, verifyStore.filterMode(FilterStage.RECEPTION))
         assertTrue(verifyStore.isHistoryImported())
+    }
+
+    @Test
+    fun systemBackWhileSearchingClearsQueryInsteadOfExitingTheApp() {
+        composeRule.onNodeWithTag(ConversationsTestTags.SEARCH_FIELD).performTextInput("test")
+        composeRule.onNodeWithTag(ConversationsTestTags.SEARCH_FIELD).assertIsFocused()
+
+        // Verified live with real KEYCODE_BACK events (not just this instrumented
+        // test): when a real IME is shown, Android itself consumes the very first
+        // back to hide the keyboard - it never reaches BackHandler at all. Only once
+        // the keyboard is gone does a back reach the app; from here it must clear the
+        // query (not exit - Conversations has no back stack of its own to pop).
+        // A real Gboard IME is active on this emulator too, so its (animated,
+        // real-wall-clock) hide needs to be waited out before the next back can
+        // reliably reach the dispatcher - matches how a real user's presses aren't
+        // instantaneous either.
+        Espresso.pressBack()
+        Thread.sleep(500)
+        Espresso.pressBack()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText("test").fetchSemanticsNodes().isEmpty()
+        }
+        composeRule.onNodeWithTag(ConversationsTestTags.SEARCH_CLEAR_BUTTON).assertDoesNotExist()
+        assertTrue("Activity must still be alive throughout", !composeRule.activity.isFinishing)
     }
 }
