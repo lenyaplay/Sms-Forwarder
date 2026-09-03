@@ -13,6 +13,7 @@ import com.smsforwarder.gateway.data.local.GatewayConfigStore
 import com.smsforwarder.gateway.data.local.db.FilterMode
 import com.smsforwarder.gateway.data.local.db.FilterStage
 import com.smsforwarder.gateway.ui.common.ConfirmDialogTestTags
+import com.smsforwarder.gateway.ui.conversations.ConversationsTestTags
 import com.smsforwarder.gateway.ui.delivery.DeliveryTestTags
 import com.smsforwarder.gateway.ui.settings.SettingsTestTags
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -76,7 +77,10 @@ class DeliveryResetActivityTest {
 
     @Test
     fun resettingDeliverySettingsThroughRealNavigationClearsDeliveryKeysOnly() {
-        composeRule.onNodeWithText("Настройки").performClick()
+        // Spec 0027: Settings is opened via the TopAppBar icon in ConversationsScreen,
+        // not a bottom-nav tab (removed) - "Настройки" is now the icon's
+        // contentDescription, not a Text node, so it isn't matched by onNodeWithText.
+        composeRule.onNodeWithTag(ConversationsTestTags.SETTINGS_BUTTON).performClick()
         composeRule.onNodeWithTag(SettingsTestTags.OPEN_DELIVERY_BUTTON).performClick()
         composeRule.onNodeWithTag(DeliveryTestTags.RESET_BUTTON).performScrollTo().performClick()
         composeRule.onNodeWithTag(ConfirmDialogTestTags.CONFIRM_BUTTON).performClick()

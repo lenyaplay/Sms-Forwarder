@@ -104,6 +104,34 @@ class ContactNameResolverTest {
         assertNull(resolvedAfterInvalidation)
     }
 
+    @Test
+    fun preSpec0027CacheFileWithoutPhotoUriStillParsesAndDefaultsPhotoToNull() {
+        // Cache file shape written by the Milestone 24 build (spec 0026) - no
+        // "photoUri" key at all. Spec 0027 added the field with a default so
+        // already-installed builds' cache files don't get silently discarded
+        // (loadCacheFromDisk falls back to an empty cache on any parse failure,
+        // which would otherwise be indistinguishable from "working as intended"
+        // here - the real assertion is that the OLD name is still served).
+        cacheFile.writeText("""[{"sender":"+70000000005","displayName":"Pre-0027 Name"}]""")
+
+        val resolver = ContactNameResolver(context)
+        val info = resolver.contactInfoFor("+70000000005")
+
+        assertEquals("Pre-0027 Name", info.displayName)
+        assertNull(info.photoUri)
+    }
+
+    @Test
+    fun contactInfoForCachesPhotoUriAlongsideDisplayName() {
+        cacheFile.writeText("""[{"sender":"+70000000006","displayName":"With Photo","photoUri":"content://fake/photo"}]""")
+
+        val resolver = ContactNameResolver(context)
+        val info = resolver.contactInfoFor("+70000000006")
+
+        assertEquals("With Photo", info.displayName)
+        assertEquals("content://fake/photo", info.photoUri)
+    }
+
     private fun waitForCacheFileToContain(needle: String) {
         val deadlineNanos = System.nanoTime() + 5_000_000_000L
         while (System.nanoTime() < deadlineNanos) {

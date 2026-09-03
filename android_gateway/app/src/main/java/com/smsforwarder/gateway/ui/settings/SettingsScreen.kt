@@ -7,12 +7,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,6 +47,7 @@ private const val EXPORT_FILE_NAME = "sms-forwarder-gateway-settings.json"
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
+    onBack: () -> Unit = {},
     onOpenDelivery: () -> Unit = {},
     onOpenFilterRules: () -> Unit = {},
     onOpenDeliveryLog: () -> Unit = {},
@@ -49,12 +56,14 @@ fun SettingsScreen(
     SettingsContent(
         uiState = uiState,
         actions = viewModel,
+        onBack = onBack,
         onOpenDelivery = onOpenDelivery,
         onOpenFilterRules = onOpenFilterRules,
         onOpenDeliveryLog = onOpenDeliveryLog,
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsContent(
     uiState: SettingsUiState = SettingsUiState(),
@@ -64,6 +73,7 @@ fun SettingsContent(
         override fun onMessageDismissed() {}
         override fun onDiagnosticsEnabledChange(value: Boolean) {}
     },
+    onBack: () -> Unit = {},
     onOpenDelivery: () -> Unit = {},
     onOpenFilterRules: () -> Unit = {},
     onOpenDeliveryLog: () -> Unit = {},
@@ -77,7 +87,21 @@ fun SettingsContent(
         if (uri != null) actions.onImportConfirmed(uri)
     }
 
-    Scaffold { padding ->
+    Scaffold(
+        // Spec 0027: Settings is now pushed onto the back stack from a TopAppBar
+        // icon in ConversationsScreen (bottom nav bar removed) - needs its own way
+        // back, unlike before when it was a top-level tab switched via bottom nav.
+        topBar = {
+            TopAppBar(
+                title = { Text("Настройки") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                    }
+                },
+            )
+        },
+    ) { padding ->
         Column(modifier = Modifier.fillMaxWidth().padding(padding)) {
             Card(
                 modifier = Modifier

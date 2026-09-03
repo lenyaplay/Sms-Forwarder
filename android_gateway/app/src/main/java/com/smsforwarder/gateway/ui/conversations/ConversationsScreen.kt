@@ -19,9 +19,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Card
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,8 +51,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.smsforwarder.gateway.data.local.db.MessageEntity
 import com.smsforwarder.gateway.ui.common.ConfirmDialog
+import com.smsforwarder.gateway.ui.common.ContactAvatar
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -65,9 +66,12 @@ object ConversationsTestTags {
     const val ARCHIVE_TOGGLE = "conversations_archive_toggle"
     const val RESEND_ALL_FAILED = "conversations_resend_all_failed"
     const val SEARCH_RESULTS_LIST = "conversations_search_results_list"
+    const val SEARCH_CLEAR_BUTTON = "conversations_search_clear_button"
+    const val SETTINGS_BUTTON = "conversations_settings_button"
     const val ROW_MENU_ARCHIVE = "conversations_row_menu_archive"
     const val ROW_MENU_DELETE = "conversations_row_menu_delete"
     fun row(sender: String) = "conversations_row_$sender"
+    fun searchResultRow(messageId: Long) = "conversations_search_result_row_$messageId"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,6 +79,7 @@ object ConversationsTestTags {
 fun ConversationsScreen(
     viewModel: ConversationsViewModel = hiltViewModel(),
     onOpenThread: (String, Long?) -> Unit,
+    onOpenSettings: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var showNewMessageDialog by remember { mutableStateOf(false) }
@@ -103,6 +108,12 @@ fun ConversationsScreen(
                             contentDescription = if (uiState.isArchivedView) "Показать активные" else "Показать архив",
                         )
                     }
+                    IconButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.testTag(ConversationsTestTags.SETTINGS_BUTTON),
+                    ) {
+                        Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                    }
                 },
             )
         },
@@ -120,6 +131,16 @@ fun ConversationsScreen(
                 value = uiState.query,
                 onValueChange = viewModel::onQueryChange,
                 label = { Text("Поиск по переписке") },
+                trailingIcon = {
+                    if (uiState.query.isNotEmpty()) {
+                        IconButton(
+                            onClick = { viewModel.onQueryChange("") },
+                            modifier = Modifier.testTag(ConversationsTestTags.SEARCH_CLEAR_BUTTON),
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Очистить поиск")
+                        }
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(8.dp)
@@ -177,8 +198,12 @@ fun ConversationsScreen(
     }
 }
 
+// Spec 0027: search results render with the same ConversationRowContent as the
+// conversations list (same avatar/fonts/spacing/time) - only the interaction differs:
+// a plain click to the exact message, no swipe-to-archive/delete, no long-press menu
+// (a search hit is one specific message, not a whole conversation to act on).
 @Composable
-private fun SearchResultsList(results: List<MessageEntity>, onOpenThread: (String, Long?) -> Unit) {
+private fun SearchResultsList(results: List<SearchResultUi>, onOpenThread: (String, Long?) -> Unit) {
     if (results.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Ничего не найдено", style = MaterialTheme.typography.bodyLarge)
@@ -189,18 +214,17 @@ private fun SearchResultsList(results: List<MessageEntity>, onOpenThread: (Strin
         modifier = Modifier.fillMaxWidth().testTag(ConversationsTestTags.SEARCH_RESULTS_LIST),
         contentPadding = PaddingValues(8.dp),
     ) {
-        items(results, key = { it.id }) { message ->
-            Card(
+        items(results, key = { it.messageId }) { result ->
+            ConversationRowContent(
+                displayName = result.displayName,
+                photoUri = result.photoUri,
+                sender = result.sender,
+                text = result.text,
+                timestampText = formatConversationTime(result.createdAt),
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-                    .clickable { onOpenThread(message.sender, message.id) },
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(text = message.sender, style = MaterialTheme.typography.titleMedium)
-                    Text(text = message.text, style = MaterialTheme.typography.bodyMedium, maxLines = 2)
-                }
-            }
+                    .clickable { onOpenThread(result.sender, result.messageId) }
+                    .testTag(ConversationsTestTags.searchResultRow(result.messageId)),
+            )
         }
     }
 }
@@ -299,11 +323,8 @@ private fun ConversationRow(
             }
         },
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .background(MaterialTheme.colorScheme.surface)
                 .combinedClickable(
                     onClick = { onOpenThread(conversation.sender, null) },
                     // Non-gesture equivalent of the swipe actions above - TalkBack
@@ -314,17 +335,13 @@ private fun ConversationRow(
                 .semantics(mergeDescendants = true) {}
                 .testTag(ConversationsTestTags.row(conversation.sender)),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = conversation.displayName, style = MaterialTheme.typography.titleMedium)
-                    Text(text = conversation.text, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
-                }
-                Text(text = formatConversationTime(conversation.createdAt), style = MaterialTheme.typography.labelSmall)
-            }
-            HorizontalDivider()
+            ConversationRowContent(
+                displayName = conversation.displayName,
+                photoUri = conversation.photoUri,
+                sender = conversation.sender,
+                text = conversation.text,
+                timestampText = formatConversationTime(conversation.createdAt),
+            )
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(
                     text = { Text(if (isArchivedView) "Показать во входящих" else "Архивировать") },
@@ -344,6 +361,38 @@ private fun ConversationRow(
                 )
             }
         }
+    }
+}
+
+/** Content-only row shared by [ConversationRow] (list) and [SearchResultsList] (spec 0027) - avatar/name/text/time/divider, no swipe/click/menu behavior of its own. */
+@Composable
+private fun ConversationRowContent(
+    displayName: String,
+    photoUri: String?,
+    sender: String,
+    text: String,
+    timestampText: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .background(MaterialTheme.colorScheme.surface),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ContactAvatar(displayName = displayName, photoUri = photoUri, sender = sender)
+            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                Text(text = displayName, style = MaterialTheme.typography.titleMedium)
+                Text(text = text, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+            }
+            Text(text = timestampText, style = MaterialTheme.typography.labelSmall)
+        }
+        HorizontalDivider()
     }
 }
 

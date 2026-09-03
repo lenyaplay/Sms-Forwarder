@@ -5,11 +5,13 @@ import androidx.compose.ui.test.onChildren
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import com.smsforwarder.gateway.data.local.ContactInfo
 import com.smsforwarder.gateway.data.local.ContactNameResolver
 import com.smsforwarder.gateway.data.local.SmsHistoryImporter
 import com.smsforwarder.gateway.data.local.db.ConversationEntity
 import com.smsforwarder.gateway.data.repository.MessageRepository
 import com.smsforwarder.gateway.ui.common.ConfirmDialogTestTags
+import com.smsforwarder.gateway.ui.common.ContactAvatarTestTags
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -29,6 +31,7 @@ class ConversationsScreenTest {
     private fun conversation(sender: String, text: String, displayName: String = sender) = ConversationUi(
         sender = sender,
         displayName = displayName,
+        photoUri = null,
         text = text,
         createdAt = 1L,
     )
@@ -77,6 +80,35 @@ class ConversationsScreenTest {
     }
 
     @Test
+    fun rowShowsSilhouetteFallbackWhenNoContactNameResolved() {
+        // conversation()'s default displayName == sender - ContactAvatar's rule is
+        // "an initial only if a name actually resolved, not just the raw sender
+        // echoed back" (spec 0027), so this must render the silhouette, not a letter.
+        composeRule.setContent {
+            ConversationsContent(conversations = listOf(conversation("+15551234", "hi")), isImporting = false, onOpenThread = { _, _ -> })
+        }
+
+        // useUnmergedTree = true: ConversationRow's semantics(mergeDescendants = true)
+        // wrapper (accessibility fix, spec 0027's neighboring UX pass) merges the
+        // avatar's own testTag into the row's merged semantics node by default.
+        composeRule.onNodeWithTag(ContactAvatarTestTags.FALLBACK_ICON, useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag(ContactAvatarTestTags.INITIAL, useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun rowShowsInitialAvatarWhenContactNameResolved() {
+        composeRule.setContent {
+            ConversationsContent(
+                conversations = listOf(conversation("+15551234", "hi", displayName = "Alice")),
+                isImporting = false,
+                onOpenThread = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(ContactAvatarTestTags.INITIAL, useUnmergedTree = true).assertExists()
+    }
+
+    @Test
     fun tappingARowOpensItsThreadWithNoTargetMessage() {
         var opened: String? = null
         var openedMessageId: Long? = -1L
@@ -105,6 +137,7 @@ class ConversationsScreenTest {
         )
         whenever(repository.searchMessages("found")).thenReturn(flowOf(listOf(foundMessage)))
         val contactNameResolver: ContactNameResolver = mock()
+        whenever(contactNameResolver.contactInfoFor("+15551234")).thenReturn(ContactInfo(null, null))
         val historyImporter: SmsHistoryImporter = mock()
         whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
         val viewModel = ConversationsViewModel(repository, contactNameResolver, historyImporter)
@@ -126,6 +159,69 @@ class ConversationsScreenTest {
     }
 
     @Test
+    fun searchResultRowUsesTheSameAvatarComponentAsTheConversationsList() {
+        val repository: MessageRepository = mock()
+        whenever(repository.observeConversations()).thenReturn(flowOf(emptyList<ConversationEntity>()))
+        whenever(repository.observeFailedCount()).thenReturn(flowOf(0))
+        val foundMessage = com.smsforwarder.gateway.data.local.db.MessageEntity(
+            id = 42L, sender = "+15551234", text = "found me", sentStamp = null, receivedStamp = 1L,
+            simSlot = 0, deliveryStatus = com.smsforwarder.gateway.data.local.db.DeliveryStatus.SENT, createdAt = 1L,
+        )
+        whenever(repository.searchMessages("found")).thenReturn(flowOf(listOf(foundMessage)))
+        val contactNameResolver: ContactNameResolver = mock()
+        whenever(contactNameResolver.contactInfoFor("+15551234")).thenReturn(ContactInfo("Alice", null))
+        val historyImporter: SmsHistoryImporter = mock()
+        whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
+        val viewModel = ConversationsViewModel(repository, contactNameResolver, historyImporter)
+
+        composeRule.setContent {
+            ConversationsScreen(viewModel = viewModel, onOpenThread = { _, _ -> })
+        }
+        composeRule.onNodeWithTag(ConversationsTestTags.SEARCH_FIELD).performTextInput("found")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking { viewModel.uiState.first().searchResults.isNotEmpty() }
+        }
+
+        // Same ContactAvatar/INITIAL rendering as a conversations-list row (spec
+        // 0027) - not the old plain Card with sender text only.
+        composeRule.onNodeWithTag(ContactAvatarTestTags.INITIAL, useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun clearButtonClearsSearchQueryAndReturnsToConversationsList() {
+        val repository: MessageRepository = mock()
+        val viewModel = buildScreenViewModel(repository)
+        composeRule.setContent {
+            ConversationsScreen(viewModel = viewModel, onOpenThread = { _, _ -> })
+        }
+
+        composeRule.onNodeWithTag(ConversationsTestTags.SEARCH_FIELD).performTextInput("something")
+        composeRule.onNodeWithTag(ConversationsTestTags.SEARCH_CLEAR_BUTTON).assertExists().performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runBlocking { viewModel.uiState.first().query.isEmpty() }
+        }
+        composeRule.onNodeWithTag(ConversationsTestTags.SEARCH_CLEAR_BUTTON).assertDoesNotExist()
+        // buildScreenViewModel's repository has no conversations - back from search
+        // means the (empty) conversations list, not the search-results list.
+        composeRule.onNodeWithTag(ConversationsTestTags.SEARCH_RESULTS_LIST).assertDoesNotExist()
+    }
+
+    @Test
+    fun settingsIconInvokesOnOpenSettingsCallback() {
+        val repository: MessageRepository = mock()
+        val viewModel = buildScreenViewModel(repository)
+        var settingsOpened = false
+        composeRule.setContent {
+            ConversationsScreen(viewModel = viewModel, onOpenThread = { _, _ -> }, onOpenSettings = { settingsOpened = true })
+        }
+
+        composeRule.onNodeWithTag(ConversationsTestTags.SETTINGS_BUTTON).performClick()
+
+        assertEquals(true, settingsOpened)
+    }
+
+    @Test
     fun contactNameIsNotReResolvedOnRepeatedEmissionsForTheSameSender() {
         val repository: MessageRepository = mock()
         val conversationsFlow = MutableStateFlow(
@@ -134,7 +230,7 @@ class ConversationsScreenTest {
         whenever(repository.observeConversations()).thenReturn(conversationsFlow)
         whenever(repository.observeFailedCount()).thenReturn(flowOf(0))
         val contactNameResolver: ContactNameResolver = mock()
-        whenever(contactNameResolver.displayNameFor("+15551234")).thenReturn("Alice")
+        whenever(contactNameResolver.contactInfoFor("+15551234")).thenReturn(ContactInfo("Alice", null))
         val historyImporter: SmsHistoryImporter = mock()
         whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
         val viewModel = ConversationsViewModel(repository, contactNameResolver, historyImporter)
@@ -156,12 +252,13 @@ class ConversationsScreenTest {
             runBlocking { viewModel.uiState.first().conversations.any { it.text == "hi again" } }
         }
 
-        verify(contactNameResolver, org.mockito.kotlin.times(1)).displayNameFor("+15551234")
+        verify(contactNameResolver, org.mockito.kotlin.times(1)).contactInfoFor("+15551234")
     }
 
     private fun buildScreenViewModel(repository: MessageRepository): ConversationsViewModel {
         whenever(repository.observeConversations()).thenReturn(flowOf(emptyList<ConversationEntity>()))
         whenever(repository.observeFailedCount()).thenReturn(flowOf(0))
+        whenever(repository.searchMessages(org.mockito.kotlin.any())).thenReturn(flowOf(emptyList()))
         val contactNameResolver: ContactNameResolver = mock()
         val historyImporter: SmsHistoryImporter = mock()
         whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))

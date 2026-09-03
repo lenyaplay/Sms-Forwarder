@@ -25,11 +25,14 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
+/** Resolved contact data for a sender - `displayName`/`photoUri` are independently nullable (a contact can have a name but no photo, or in principle be matched without a readable name). */
+data class ContactInfo(val displayName: String?, val photoUri: String?)
+
 /**
- * Best-effort contact name lookup - returns null (never throws) whenever the
+ * Best-effort contact lookup - returns nulls (never throws) whenever the
  * permission is missing or nothing matches.
  *
- * Spec 0026: [displayNameFor] used to hit `content://com.android.contacts` via
+ * Spec 0026: [contactInfoFor] used to hit `content://com.android.contacts` via
  * [ContactsContract.PhoneLookup] on every single call - one IPC round-trip per
  * sender, ~15-18ms each, measured at ~720-925ms total for ~50 senders (the
  * dominant cost of cold start, ~4-6x the Room query itself). A per-ViewModel
@@ -39,19 +42,27 @@ import kotlinx.serialization.json.Json
  * very first resolution of a given sender ever touches ContactsProvider;
  * every cold start after that reads the persisted map (a JSON parse of a few
  * dozen/hundred entries costs low-single-digit ms, not hundreds).
+ *
+ * Spec 0027: extended to also resolve `PHOTO_THUMBNAIL_URI` for the
+ * conversations-list avatar. `CacheEntry.photoUri` defaults to null so a
+ * cache file written by the pre-0027 build (sender/displayName only) still
+ * decodes - the app isn't in production yet, so no forced one-time
+ * recompute was added; a photo simply appears the next time a sender's
+ * entry is naturally invalidated (any address-book change clears the whole
+ * cache, same as before).
  */
 @Singleton
 open class ContactNameResolver @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     @Serializable
-    private data class CacheEntry(val sender: String, val displayName: String?)
+    private data class CacheEntry(val sender: String, val displayName: String?, val photoUri: String? = null)
 
-    // Explicit key presence (via containsKey), not a non-null value, marks "already
-    // resolved" - a sender genuinely absent from Contacts resolves to a real null
-    // that must itself be cached, or every cold start would re-query ContactsProvider
-    // for every unknown number too.
-    private val cache: MutableMap<String, String?>
+    // Explicit key presence (via containsKey), not a non-null ContactInfo, marks
+    // "already resolved" - a sender genuinely absent from Contacts resolves to a
+    // real ContactInfo(null, null) that must itself be cached, or every cold start
+    // would re-query ContactsProvider for every unknown number too.
+    private val cache: MutableMap<String, ContactInfo>
     private val cacheMutex = Mutex()
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var contactsObserver: ContentObserver? = null
@@ -61,9 +72,11 @@ open class ContactNameResolver @Inject constructor(
         registerContactsObserverIfPermitted()
     }
 
-    open fun displayNameFor(phoneNumber: String): String? {
+    open fun displayNameFor(phoneNumber: String): String? = contactInfoFor(phoneNumber).displayName
+
+    open fun contactInfoFor(phoneNumber: String): ContactInfo {
         synchronized(cache) {
-            if (cache.containsKey(phoneNumber)) return cache[phoneNumber]
+            cache[phoneNumber]?.let { return it }
         }
         val resolved = queryContactsProvider(phoneNumber)
         synchronized(cache) { cache[phoneNumber] = resolved }
@@ -71,22 +84,26 @@ open class ContactNameResolver @Inject constructor(
         return resolved
     }
 
-    private fun queryContactsProvider(phoneNumber: String): String? {
+    private fun queryContactsProvider(phoneNumber: String): ContactInfo {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            return null
+            return ContactInfo(displayName = null, photoUri = null)
         }
         val uri = Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, Uri.encode(phoneNumber))
         return context.contentResolver.query(
             uri,
-            arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME),
+            arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME, ContactsContract.PhoneLookup.PHOTO_THUMBNAIL_URI),
             null,
             null,
             null,
         )?.use { cursor ->
-            if (cursor.moveToFirst()) cursor.getString(0) else null
-        }
+            if (cursor.moveToFirst()) {
+                ContactInfo(displayName = cursor.getString(0), photoUri = cursor.getString(1))
+            } else {
+                ContactInfo(displayName = null, photoUri = null)
+            }
+        } ?: ContactInfo(displayName = null, photoUri = null)
     }
 
     /** Drops the whole cache on any address-book change - the dataset is small (personal-scale conversation count), so a full re-resolve on next access is cheap and avoids tracking which specific contact changed. */
@@ -108,11 +125,12 @@ open class ContactNameResolver @Inject constructor(
         }.onFailure { Log.w(TAG, "failed to register contacts observer", it) }
     }
 
-    private fun loadCacheFromDisk(): Map<String, String?> {
+    private fun loadCacheFromDisk(): Map<String, ContactInfo> {
         val file = cacheFile()
         if (!file.exists()) return emptyMap()
         return runCatching {
-            Json.decodeFromString<List<CacheEntry>>(file.readText()).associate { it.sender to it.displayName }
+            Json.decodeFromString<List<CacheEntry>>(file.readText())
+                .associate { it.sender to ContactInfo(it.displayName, it.photoUri) }
         }.getOrElse {
             Log.w(TAG, "failed to read contact name cache, starting empty", it)
             emptyMap()
@@ -121,7 +139,9 @@ open class ContactNameResolver @Inject constructor(
 
     private suspend fun persistCacheToDisk() {
         cacheMutex.withLock {
-            val snapshot = synchronized(cache) { cache.map { (sender, name) -> CacheEntry(sender, name) } }
+            val snapshot = synchronized(cache) {
+                cache.map { (sender, info) -> CacheEntry(sender, info.displayName, info.photoUri) }
+            }
             runCatching {
                 cacheFile().writeText(Json.encodeToString(snapshot))
             }.onFailure { Log.w(TAG, "failed to write contact name cache", it) }

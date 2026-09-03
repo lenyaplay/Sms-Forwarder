@@ -133,6 +133,8 @@ dependencies {
     implementation(libs.metrics.performance)
     implementation(libs.profileinstaller)
 
+    implementation(libs.coil.compose)
+
     baselineProfile(project(":baselineprofile"))
 
     testImplementation(libs.junit)

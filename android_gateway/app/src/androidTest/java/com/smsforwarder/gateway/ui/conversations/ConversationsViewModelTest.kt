@@ -1,6 +1,7 @@
 package com.smsforwarder.gateway.ui.conversations
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import com.smsforwarder.gateway.data.local.ContactInfo
 import com.smsforwarder.gateway.data.local.ContactNameResolver
 import com.smsforwarder.gateway.data.local.SmsHistoryImporter
 import com.smsforwarder.gateway.data.local.db.ConversationEntity
@@ -36,6 +37,13 @@ class ConversationsViewModelTest {
         whenever(repository.observeConversations(false)).thenReturn(flowOf(emptyList<ConversationEntity>()))
         whenever(repository.observeConversations(true)).thenReturn(flowOf(emptyList<ConversationEntity>()))
         whenever(repository.observeFailedCount()).thenReturn(flowOf(0))
+        // Spec 0027: ConversationsViewModel resolves ContactInfo (not just a display
+        // name) for both the conversations list and search results - an unstubbed
+        // mock() answer is null here (object return type), which NPEs at the
+        // `.displayName` access unless every test that reaches contactInfoFor stubs
+        // it explicitly. Default to "not resolved" so only tests asserting actual
+        // resolved names need their own stub.
+        whenever(contactNameResolver.contactInfoFor(org.mockito.kotlin.any())).thenReturn(ContactInfo(null, null))
         val historyImporter: SmsHistoryImporter = mock()
         whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
         lateinit var viewModel: ConversationsViewModel
@@ -52,7 +60,7 @@ class ConversationsViewModelTest {
 
         viewModel.onArchiveToggle("+15551234", currentlyArchived = false)
 
-        runBlocking { verify(repository).archiveConversation("+15551234") }
+        verifyEventually { verify(repository).archiveConversation("+15551234") }
     }
 
     @Test
@@ -62,7 +70,7 @@ class ConversationsViewModelTest {
 
         viewModel.onArchiveToggle("+15551234", currentlyArchived = true)
 
-        runBlocking { verify(repository).unarchiveConversation("+15551234") }
+        verifyEventually { verify(repository).unarchiveConversation("+15551234") }
     }
 
     @Test
@@ -72,7 +80,7 @@ class ConversationsViewModelTest {
 
         viewModel.onDeleteConversation("+15551234")
 
-        runBlocking { verify(repository).deleteConversation("+15551234") }
+        verifyEventually { verify(repository).deleteConversation("+15551234") }
     }
 
     @Test
@@ -85,11 +93,13 @@ class ConversationsViewModelTest {
             flowOf(listOf(ConversationEntity("+2", "archived", 1L, com.smsforwarder.gateway.data.local.db.DeliveryStatus.SENT, com.smsforwarder.gateway.data.local.db.MessageDirection.IN)))
         )
         whenever(repository.observeFailedCount()).thenReturn(flowOf(0))
+        val contactNameResolver: ContactNameResolver = mock()
+        whenever(contactNameResolver.contactInfoFor(org.mockito.kotlin.any())).thenReturn(ContactInfo(null, null))
         val historyImporter: SmsHistoryImporter = mock()
         whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
         lateinit var viewModel: ConversationsViewModel
         composeRule.setContent {
-            viewModel = ConversationsViewModel(repository, mock(), historyImporter)
+            viewModel = ConversationsViewModel(repository, contactNameResolver, historyImporter)
         }
 
         composeRule.waitUntil(timeoutMillis = 5_000) {
@@ -129,7 +139,25 @@ class ConversationsViewModelTest {
 
         viewModel.onResendAllFailed()
 
-        runBlocking { verify(repository).retryAllFailed() }
+        verifyEventually { verify(repository).retryAllFailed() }
+    }
+
+    // These fire-and-forget actions (onArchiveToggle/onDeleteConversation/
+    // onResendAllFailed) launch a coroutine on viewModelScope (Dispatchers.Main)
+    // rather than suspending - verify() called immediately after, on the test
+    // thread, races the dispatch to Main and was observed to fail nondeterministically
+    // (a different call each run) once the emulator was under load from a long
+    // full-suite run. Not a spec 0027 regression - the race predates it - but
+    // fixed here since it undermines "the regression suite is green" as a signal.
+    private fun verifyEventually(block: suspend () -> Unit) {
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            try {
+                runBlocking { block() }
+                true
+            } catch (e: Throwable) {
+                false
+            }
+        }
     }
 
     @Test
@@ -138,11 +166,13 @@ class ConversationsViewModelTest {
         val conversationsFlow = MutableSharedFlow<List<ConversationEntity>>() // no replay - subscriber controls timing
         whenever(repository.observeConversations(false)).thenReturn(conversationsFlow)
         whenever(repository.observeFailedCount()).thenReturn(flowOf(0))
+        val contactNameResolver: ContactNameResolver = mock()
+        whenever(contactNameResolver.contactInfoFor(org.mockito.kotlin.any())).thenReturn(ContactInfo(null, null))
         val historyImporter: SmsHistoryImporter = mock()
         whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
         lateinit var viewModel: ConversationsViewModel
         composeRule.setContent {
-            viewModel = ConversationsViewModel(repository, mock(), historyImporter)
+            viewModel = ConversationsViewModel(repository, contactNameResolver, historyImporter)
         }
 
         assertEquals(false, runBlocking { viewModel.uiState.first().hasLoadedOnce })
@@ -159,11 +189,13 @@ class ConversationsViewModelTest {
         val repository: MessageRepository = mock()
         whenever(repository.observeConversations(false)).thenReturn(flowOf(emptyList<ConversationEntity>()))
         whenever(repository.observeFailedCount()).thenReturn(flowOf(3))
+        val contactNameResolver: ContactNameResolver = mock()
+        whenever(contactNameResolver.contactInfoFor(org.mockito.kotlin.any())).thenReturn(ContactInfo(null, null))
         val historyImporter: SmsHistoryImporter = mock()
         whenever(historyImporter.isImporting).thenReturn(MutableStateFlow(false))
         lateinit var viewModel: ConversationsViewModel
         composeRule.setContent {
-            viewModel = ConversationsViewModel(repository, mock(), historyImporter)
+            viewModel = ConversationsViewModel(repository, contactNameResolver, historyImporter)
         }
 
         composeRule.waitUntil(timeoutMillis = 5_000) {

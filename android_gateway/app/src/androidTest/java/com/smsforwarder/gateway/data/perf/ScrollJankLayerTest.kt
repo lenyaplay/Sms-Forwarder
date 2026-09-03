@@ -120,7 +120,7 @@ class ScrollJankLayerTest {
                 // Real Room data, real row count/content - contact-name resolution is skipped
                 // (it runs on Dispatchers.IO in the real ViewModel and isn't part of the UI-thread
                 // composition/scroll cost this experiment measures), sender used as display name.
-                ConversationUi(sender = entity.sender, displayName = entity.sender, text = entity.text, createdAt = entity.createdAt)
+                ConversationUi(sender = entity.sender, displayName = entity.sender, photoUri = null, text = entity.text, createdAt = entity.createdAt)
             }
         }
         // Logged explicitly, not just row count, because ROW_COUNT (40) could coincidentally
@@ -195,7 +195,7 @@ class ScrollJankLayerTest {
         internal const val SCREEN_TAG = "isolated_scroll_test_list"
 
         internal fun syntheticRows(count: Int): List<ConversationUi> = (1..count).map { i ->
-            ConversationUi(sender = "+1555000$i", displayName = "Synthetic $i", text = "Synthetic message body for row $i, long enough to be realistic.", createdAt = i.toLong())
+            ConversationUi(sender = "+1555000$i", displayName = "Synthetic $i", photoUri = null, text = "Synthetic message body for row $i, long enough to be realistic.", createdAt = i.toLong())
         }
     }
 }
