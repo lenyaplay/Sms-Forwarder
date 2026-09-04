@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -44,8 +44,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -67,6 +70,7 @@ object ThreadTestTags {
     fun retryButton(id: Long) = "thread_retry_button_$id"
     fun simMenuItem(subscriptionId: Int) = "thread_sim_menu_item_$subscriptionId"
     fun bubble(id: Long) = "thread_bubble_$id"
+    fun simIndicator(messageId: Long) = "thread_sim_indicator_$messageId"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -132,6 +136,27 @@ fun ThreadContent(uiState: ThreadUiState, actions: ThreadActions, modifier: Modi
         }
     }
 
+    // Scrolling the history upward (toward older messages) hides the keyboard, like
+    // most messengers - a separate LaunchedEffect from the auto-scroll-to-newest one
+    // above, since that one only ever increases firstVisibleItemIndex/offset and so
+    // never reads as "scrolled up" here.
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(listState) {
+        var previousIndex = listState.firstVisibleItemIndex
+        var previousOffset = listState.firstVisibleItemScrollOffset
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                val scrolledUp = index < previousIndex || (index == previousIndex && offset < previousOffset)
+                if (scrolledUp) {
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
+                }
+                previousIndex = index
+                previousOffset = offset
+            }
+    }
+
     // Memoized once per `actions` identity (stable - the ViewModel instance doesn't
     // change), not recreated per item per recomposition - passing a fresh closure to
     // MessageBubble on every keystroke/state update would defeat LazyColumn's ability
@@ -147,13 +172,14 @@ fun ThreadContent(uiState: ThreadUiState, actions: ThreadActions, modifier: Modi
                 .weight(1f)
                 .testTag(ThreadTestTags.LIST),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(uiState.messages, key = { it.id }) { message ->
+            itemsIndexed(uiState.messages, key = { _, message -> message.id }) { index, message ->
                 MessageBubble(
                     message = message,
                     onRetry = onRetry,
                     onDelete = onDeleteMessage,
+                    showSimIndicator = uiState.showSimSelector,
+                    isFirstInGroup = uiState.messages.isFirstInGroup(index),
                 )
             }
         }
@@ -236,13 +262,22 @@ fun ThreadContent(uiState: ThreadUiState, actions: ThreadActions, modifier: Modi
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MessageBubble(message: MessageEntity, onRetry: (Long) -> Unit, onDelete: (Long) -> Unit) {
+private fun MessageBubble(
+    message: MessageEntity,
+    onRetry: (Long) -> Unit,
+    onDelete: (Long) -> Unit,
+    showSimIndicator: Boolean,
+    isFirstInGroup: Boolean,
+) {
     val isOutgoing = message.direction == MessageDirection.OUT
     var showMenu by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    val bubbleContentColor = if (isOutgoing) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = if (isFirstInGroup) 8.dp else 2.dp),
         horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
     ) {
         Column(
@@ -258,13 +293,23 @@ private fun MessageBubble(message: MessageEntity, onRetry: (Long) -> Unit, onDel
         ) {
             Text(
                 text = message.text,
-                color = if (isOutgoing) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = bubbleContentColor,
             )
-            Text(
-                text = formatTime(message.createdAt),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (isOutgoing) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = formatTime(message.createdAt),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = bubbleContentColor,
+                )
+                if (showSimIndicator && message.simSlot != null) {
+                    Text(
+                        text = "SIM ${message.simSlot + 1}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = bubbleContentColor,
+                        modifier = Modifier.testTag(ThreadTestTags.simIndicator(message.id)),
+                    )
+                }
+            }
             if (message.deliveryStatus == DeliveryStatus.FAILED) {
                 TextButton(
                     onClick = { onRetry(message.id) },

@@ -26,10 +26,25 @@ private val HISTORY_PROJECTION = arrayOf(
     Telephony.Sms.BODY,
     Telephony.Sms.DATE,
     Telephony.Sms.TYPE,
+    Telephony.Sms.SUBSCRIPTION_ID,
 )
 
-/** Maps one content://sms row to a MessageEntity - shared by the full import and the incremental sync. */
-internal fun Cursor.toMessageEntity(idCol: Int, addressCol: Int, bodyCol: Int, dateCol: Int, typeCol: Int): MessageEntity? {
+/**
+ * Maps one content://sms row to a MessageEntity - shared by the full import and the
+ * incremental sync. simSlot is resolved via SimOptionsProvider, not stored directly -
+ * SUBSCRIPTION_ID identifies a subscription, not a physical slot, and a subscription
+ * that's since been deactivated/removed can't be resolved (simSlot then stays null,
+ * same as history imported before this field was read at all - spec 0029).
+ */
+internal fun Cursor.toMessageEntity(
+    idCol: Int,
+    addressCol: Int,
+    bodyCol: Int,
+    dateCol: Int,
+    typeCol: Int,
+    subscriptionIdCol: Int,
+    simOptionsProvider: SimOptionsProvider,
+): MessageEntity? {
     val address = if (addressCol >= 0) getString(addressCol) else null
     if (address.isNullOrBlank()) return null
     val date = if (dateCol >= 0) getLong(dateCol) else System.currentTimeMillis()
@@ -38,12 +53,13 @@ internal fun Cursor.toMessageEntity(idCol: Int, addressCol: Int, bodyCol: Int, d
     } else {
         MessageDirection.IN
     }
+    val subscriptionId = if (subscriptionIdCol >= 0) getInt(subscriptionIdCol) else -1
     return MessageEntity(
         sender = address,
         text = if (bodyCol >= 0) getString(bodyCol).orEmpty() else "",
         sentStamp = date,
         receivedStamp = date,
-        simSlot = null,
+        simSlot = simOptionsProvider.slotForSubscriptionId(subscriptionId.takeIf { it >= 0 }),
         deliveryStatus = DeliveryStatus.SENT,
         createdAt = date,
         direction = direction,
@@ -81,6 +97,7 @@ open class SmsHistoryImporter @Inject constructor(
     private val messageDao: MessageDao,
     private val configStore: GatewayConfigStore,
     private val perfMonitor: PerfMonitor,
+    private val simOptionsProvider: SimOptionsProvider,
 ) {
     private val _isImporting = MutableStateFlow(false)
     open val isImporting: StateFlow<Boolean> = _isImporting.asStateFlow()
@@ -105,10 +122,11 @@ open class SmsHistoryImporter @Inject constructor(
                             val bodyCol = cursor.getColumnIndex(Telephony.Sms.BODY)
                             val dateCol = cursor.getColumnIndex(Telephony.Sms.DATE)
                             val typeCol = cursor.getColumnIndex(Telephony.Sms.TYPE)
+                            val subscriptionIdCol = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
                             while (cursor.moveToNext()) {
                                 val rowId = if (idCol >= 0) cursor.getLong(idCol) else 0L
                                 if (rowId > maxRowId) maxRowId = rowId
-                                cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol)?.let { messageDao.upsertFromSystemProvider(rowId, it) }
+                                cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol, subscriptionIdCol, simOptionsProvider)?.let { messageDao.upsertFromSystemProvider(rowId, it) }
                             }
                         }
                         configStore.setLastSyncedSmsRowId(maxRowId)
@@ -143,10 +161,11 @@ open class SmsHistoryImporter @Inject constructor(
                         val bodyCol = cursor.getColumnIndex(Telephony.Sms.BODY)
                         val dateCol = cursor.getColumnIndex(Telephony.Sms.DATE)
                         val typeCol = cursor.getColumnIndex(Telephony.Sms.TYPE)
+                        val subscriptionIdCol = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
                         while (cursor.moveToNext()) {
                             val rowId = if (idCol >= 0) cursor.getLong(idCol) else since
                             if (rowId > maxRowId) maxRowId = rowId
-                            cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol)?.let { messageDao.upsertFromSystemProvider(rowId, it) }
+                            cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol, subscriptionIdCol, simOptionsProvider)?.let { messageDao.upsertFromSystemProvider(rowId, it) }
                         }
                     }
                     if (maxRowId != since) configStore.setLastSyncedSmsRowId(maxRowId)

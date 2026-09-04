@@ -6,11 +6,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.unit.dp
 import com.smsforwarder.gateway.data.local.SimOption
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
@@ -26,13 +29,13 @@ class ThreadScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
 
-    private fun message(id: Long) = MessageEntity(
+    private fun message(id: Long, simSlot: Int? = 0) = MessageEntity(
         id = id,
         sender = "+15551234",
         text = "message $id",
         sentStamp = null,
         receivedStamp = id,
-        simSlot = 0,
+        simSlot = simSlot,
         deliveryStatus = DeliveryStatus.SENT,
         createdAt = id,
         direction = MessageDirection.IN,
@@ -198,5 +201,82 @@ class ThreadScreenTest {
         }
 
         composeRule.onNodeWithTag(ThreadTestTags.SIM_SELECTOR).assertDoesNotExist()
+    }
+
+    // Spec 0029: the SIM label next to a message's timestamp only shows up when there
+    // are 2+ active SIMs (same visibility rule as the draft field's SIM selector) AND
+    // the message itself carries a resolved simSlot - older, pre-fix history stays null.
+    @Test
+    fun simIndicatorIsShownOnAMessageWithAKnownSimSlotWhenMultipleSimsAreActive() {
+        val sims = listOf(
+            SimOption(subscriptionId = 1, slotIndex = 0, displayName = "Tinkoff"),
+            SimOption(subscriptionId = 2, slotIndex = 1, displayName = "YOTA"),
+        )
+        composeRule.setContent {
+            ThreadContent(
+                uiState = ThreadUiState(
+                    sender = "+15551234",
+                    messages = listOf(message(1L, simSlot = 1)),
+                    availableSims = sims,
+                    selectedSubscriptionId = 1,
+                ),
+                actions = noopActions,
+            )
+        }
+
+        composeRule.onNodeWithTag(ThreadTestTags.simIndicator(1L), useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun simIndicatorIsHiddenWhenTheMessageHasNoKnownSimSlot() {
+        val sims = listOf(
+            SimOption(subscriptionId = 1, slotIndex = 0, displayName = "Tinkoff"),
+            SimOption(subscriptionId = 2, slotIndex = 1, displayName = "YOTA"),
+        )
+        composeRule.setContent {
+            ThreadContent(
+                uiState = ThreadUiState(
+                    sender = "+15551234",
+                    messages = listOf(message(1L, simSlot = null)),
+                    availableSims = sims,
+                    selectedSubscriptionId = 1,
+                ),
+                actions = noopActions,
+            )
+        }
+
+        composeRule.onNodeWithTag(ThreadTestTags.simIndicator(1L)).assertDoesNotExist()
+    }
+
+    @Test
+    fun simIndicatorIsHiddenWithOnlyOneSimEvenWhenSimSlotIsKnown() {
+        composeRule.setContent {
+            ThreadContent(
+                uiState = ThreadUiState(sender = "+15551234", messages = listOf(message(1L, simSlot = 0))),
+                actions = noopActions,
+            )
+        }
+
+        composeRule.onNodeWithTag(ThreadTestTags.simIndicator(1L)).assertDoesNotExist()
+    }
+
+    // Spec 0029: scrolling the message history upward hides the keyboard/clears focus
+    // from the draft field, like most messengers - focus itself (rather than IME
+    // visibility, which Compose's test APIs can't observe directly) is what's asserted.
+    @Test
+    fun scrollingTheMessageListUpwardClearsFocusFromTheDraftField() {
+        val messages = (1L..50L).map { message(it) }
+        composeRule.setContent {
+            ThreadContent(
+                uiState = ThreadUiState(sender = "+15551234", messages = messages, scrollToMessageId = null),
+                actions = noopActions,
+            )
+        }
+        composeRule.onNodeWithTag(ThreadTestTags.DRAFT_FIELD).performClick()
+        composeRule.onNodeWithTag(ThreadTestTags.DRAFT_FIELD).assertIsFocused()
+
+        composeRule.onNodeWithTag(ThreadTestTags.LIST).performScrollToIndex(0)
+
+        composeRule.onNodeWithTag(ThreadTestTags.DRAFT_FIELD).assertIsNotFocused()
     }
 }

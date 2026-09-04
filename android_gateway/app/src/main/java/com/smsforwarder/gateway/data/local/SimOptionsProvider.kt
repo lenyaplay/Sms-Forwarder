@@ -40,4 +40,8 @@ open class SimOptionsProvider @Inject constructor(
     /** Maps a reception-time slot index (SimSlotResolver) to the subscriptionId filter rules key on. Null if the slot isn't among the currently active SIMs. */
     open fun subscriptionIdForSlot(slotIndex: Int?): Int? =
         activeSims().find { it.slotIndex == slotIndex }?.subscriptionId
+
+    /** Reverse of subscriptionIdForSlot - maps content://sms's SUBSCRIPTION_ID column to a slot for history import. Null if that subscription is no longer active. */
+    open fun slotForSubscriptionId(subscriptionId: Int?): Int? =
+        subscriptionId?.let { id -> activeSims().find { it.subscriptionId == id }?.slotIndex }
 }
