@@ -55,12 +55,14 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.smsforwarder.gateway.ui.common.AVATAR_SIZE
+import com.smsforwarder.gateway.ui.common.highlightedText
 import com.smsforwarder.gateway.ui.common.ConfirmDialog
 import com.smsforwarder.gateway.ui.common.ContactAvatar
 import java.text.SimpleDateFormat
@@ -202,7 +204,7 @@ fun ConversationsScreen(
                     .testTag(ConversationsTestTags.SEARCH_FIELD),
             )
             if (uiState.isSearching) {
-                SearchResultsList(results = uiState.searchResults, onOpenThread = onOpenThread)
+                SearchResultsList(results = uiState.searchResults, query = uiState.query, onOpenThread = onOpenThread)
             } else {
                 ConversationsContent(
                     conversations = uiState.conversations,
@@ -258,7 +260,7 @@ fun ConversationsScreen(
 // a plain click to the exact message, no swipe-to-archive/delete, no long-press menu
 // (a search hit is one specific message, not a whole conversation to act on).
 @Composable
-private fun SearchResultsList(results: List<SearchResultUi>, onOpenThread: (String, Long?) -> Unit) {
+private fun SearchResultsList(results: List<SearchResultUi>, query: String, onOpenThread: (String, Long?) -> Unit) {
     if (results.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("Ничего не найдено", style = MaterialTheme.typography.bodyLarge)
@@ -274,7 +276,7 @@ private fun SearchResultsList(results: List<SearchResultUi>, onOpenThread: (Stri
                 displayName = result.displayName,
                 photoUri = result.photoUri,
                 sender = result.sender,
-                text = result.text,
+                text = highlightedText(result.text, query),
                 timestampText = formatConversationTime(result.createdAt),
                 modifier = Modifier
                     .clickable { onOpenThread(result.sender, result.messageId) }
@@ -395,7 +397,7 @@ private fun ConversationRow(
                 displayName = conversation.displayName,
                 photoUri = conversation.photoUri,
                 sender = conversation.sender,
-                text = conversation.text,
+                text = AnnotatedString(conversation.text),
                 timestampText = formatConversationTime(conversation.createdAt),
             )
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
@@ -426,7 +428,7 @@ private fun ConversationRowContent(
     displayName: String,
     photoUri: String?,
     sender: String,
-    text: String,
+    text: AnnotatedString,
     timestampText: String,
     modifier: Modifier = Modifier,
 ) {

@@ -11,6 +11,7 @@
 .cxx/
 app/build/
 baselineprofile/build/
+macrobenchmark/build/
 gradle/wrapper/gradle-wrapper.jar
 window_dump.xml
 

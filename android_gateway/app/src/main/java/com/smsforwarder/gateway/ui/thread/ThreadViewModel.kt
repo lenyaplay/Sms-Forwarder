@@ -24,6 +24,9 @@ interface ThreadActions {
     fun onSelectSim(subscriptionId: Int)
     fun onDeleteMessage(messageId: Long)
     fun onDeleteConversation()
+    fun onToggleMessageSelection(messageId: Long)
+    fun onClearSelection()
+    fun onDeleteSelectedMessages()
 }
 
 @HiltViewModel
@@ -99,5 +102,24 @@ class ThreadViewModel @Inject constructor(
 
     override fun onDeleteConversation() {
         viewModelScope.launch { repository.deleteConversation(sender) }
+    }
+
+    override fun onToggleMessageSelection(messageId: Long) {
+        _uiState.update { state ->
+            val selected = state.selectedMessageIds
+            state.copy(selectedMessageIds = if (messageId in selected) selected - messageId else selected + messageId)
+        }
+    }
+
+    override fun onClearSelection() {
+        _uiState.update { it.copy(selectedMessageIds = emptySet()) }
+    }
+
+    override fun onDeleteSelectedMessages() {
+        val idsToDelete = _uiState.value.selectedMessageIds
+        viewModelScope.launch {
+            idsToDelete.forEach { repository.deleteMessage(it) }
+        }
+        onClearSelection()
     }
 }

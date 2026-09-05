@@ -2,6 +2,7 @@ package com.smsforwarder.gateway.data.local
 
 import android.content.Context
 import android.database.Cursor
+import android.os.Trace
 import android.provider.Telephony
 import android.util.Log
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
@@ -116,18 +117,34 @@ open class SmsHistoryImporter @Inject constructor(
                 mutex.withLock {
                     withContext(Dispatchers.IO) {
                         var maxRowId = 0L
-                        context.contentResolver.query(Telephony.Sms.CONTENT_URI, HISTORY_PROJECTION, null, null, null)?.use { cursor ->
-                            val idCol = cursor.getColumnIndex(Telephony.Sms._ID)
-                            val addressCol = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
-                            val bodyCol = cursor.getColumnIndex(Telephony.Sms.BODY)
-                            val dateCol = cursor.getColumnIndex(Telephony.Sms.DATE)
-                            val typeCol = cursor.getColumnIndex(Telephony.Sms.TYPE)
-                            val subscriptionIdCol = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
-                            while (cursor.moveToNext()) {
-                                val rowId = if (idCol >= 0) cursor.getLong(idCol) else 0L
-                                if (rowId > maxRowId) maxRowId = rowId
-                                cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol, subscriptionIdCol, simOptionsProvider)?.let { messageDao.upsertFromSystemProvider(rowId, it) }
+                        // Spec 0030: two separate sections so Macrobenchmark's
+                        // TraceSectionMetric can attribute the content://sms provider
+                        // round-trip (query) separately from reading the cursor and
+                        // writing rows into Room (interleaved per-row, so bundled into
+                        // one section rather than split further per row).
+                        val cursor = try {
+                            Trace.beginSection("sms_history_query")
+                            context.contentResolver.query(Telephony.Sms.CONTENT_URI, HISTORY_PROJECTION, null, null, null)
+                        } finally {
+                            Trace.endSection()
+                        }
+                        try {
+                            Trace.beginSection("sms_history_room_write")
+                            cursor?.use {
+                                val idCol = it.getColumnIndex(Telephony.Sms._ID)
+                                val addressCol = it.getColumnIndex(Telephony.Sms.ADDRESS)
+                                val bodyCol = it.getColumnIndex(Telephony.Sms.BODY)
+                                val dateCol = it.getColumnIndex(Telephony.Sms.DATE)
+                                val typeCol = it.getColumnIndex(Telephony.Sms.TYPE)
+                                val subscriptionIdCol = it.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
+                                while (it.moveToNext()) {
+                                    val rowId = if (idCol >= 0) it.getLong(idCol) else 0L
+                                    if (rowId > maxRowId) maxRowId = rowId
+                                    it.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol, subscriptionIdCol, simOptionsProvider)?.let { entity -> messageDao.upsertFromSystemProvider(rowId, entity) }
+                                }
                             }
+                        } finally {
+                            Trace.endSection()
                         }
                         configStore.setLastSyncedSmsRowId(maxRowId)
                         configStore.markHistoryImported()
@@ -149,24 +166,35 @@ open class SmsHistoryImporter @Inject constructor(
                 withContext(Dispatchers.IO) {
                     val since = configStore.lastSyncedSmsRowId()
                     var maxRowId = since
-                    context.contentResolver.query(
-                        Telephony.Sms.CONTENT_URI,
-                        HISTORY_PROJECTION,
-                        "${Telephony.Sms._ID} > ?",
-                        arrayOf(since.toString()),
-                        "${Telephony.Sms._ID} ASC",
-                    )?.use { cursor ->
-                        val idCol = cursor.getColumnIndex(Telephony.Sms._ID)
-                        val addressCol = cursor.getColumnIndex(Telephony.Sms.ADDRESS)
-                        val bodyCol = cursor.getColumnIndex(Telephony.Sms.BODY)
-                        val dateCol = cursor.getColumnIndex(Telephony.Sms.DATE)
-                        val typeCol = cursor.getColumnIndex(Telephony.Sms.TYPE)
-                        val subscriptionIdCol = cursor.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
-                        while (cursor.moveToNext()) {
-                            val rowId = if (idCol >= 0) cursor.getLong(idCol) else since
-                            if (rowId > maxRowId) maxRowId = rowId
-                            cursor.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol, subscriptionIdCol, simOptionsProvider)?.let { messageDao.upsertFromSystemProvider(rowId, it) }
+                    val cursor = try {
+                        Trace.beginSection("sms_history_query")
+                        context.contentResolver.query(
+                            Telephony.Sms.CONTENT_URI,
+                            HISTORY_PROJECTION,
+                            "${Telephony.Sms._ID} > ?",
+                            arrayOf(since.toString()),
+                            "${Telephony.Sms._ID} ASC",
+                        )
+                    } finally {
+                        Trace.endSection()
+                    }
+                    try {
+                        Trace.beginSection("sms_history_room_write")
+                        cursor?.use {
+                            val idCol = it.getColumnIndex(Telephony.Sms._ID)
+                            val addressCol = it.getColumnIndex(Telephony.Sms.ADDRESS)
+                            val bodyCol = it.getColumnIndex(Telephony.Sms.BODY)
+                            val dateCol = it.getColumnIndex(Telephony.Sms.DATE)
+                            val typeCol = it.getColumnIndex(Telephony.Sms.TYPE)
+                            val subscriptionIdCol = it.getColumnIndex(Telephony.Sms.SUBSCRIPTION_ID)
+                            while (it.moveToNext()) {
+                                val rowId = if (idCol >= 0) it.getLong(idCol) else since
+                                if (rowId > maxRowId) maxRowId = rowId
+                                it.toMessageEntity(idCol, addressCol, bodyCol, dateCol, typeCol, subscriptionIdCol, simOptionsProvider)?.let { entity -> messageDao.upsertFromSystemProvider(rowId, entity) }
+                            }
                         }
+                    } finally {
+                        Trace.endSection()
                     }
                     if (maxRowId != since) configStore.setLastSyncedSmsRowId(maxRowId)
                 }

@@ -1,6 +1,7 @@
 package com.smsforwarder.gateway.ui.conversations
 
 import android.os.SystemClock
+import android.os.Trace
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -158,19 +159,28 @@ class ConversationsViewModel @Inject constructor(
                 val isFirstEmission = !firstEmissionLogged
                 val emissionReceivedAtNanos = System.nanoTime()
                 val resolveStartNanos = System.nanoTime()
-                val conversationsUi = withContext(Dispatchers.IO) {
-                    conversations.map { entity ->
-                        val contactInfo = synchronized(contactNameCache) {
-                            contactNameCache.getOrPut(entity.sender) { contactNameResolver.contactInfoFor(entity.sender) }
+                // Spec 0030: marks the resolve-to-first-real-row window for
+                // Macrobenchmark's TraceSectionMetric("first_real_row") - only on
+                // the first emission, to isolate cold-start cost from every
+                // subsequent (already-warm) recomposition of this same collector.
+                if (isFirstEmission) Trace.beginSection("first_real_row")
+                val conversationsUi = try {
+                    withContext(Dispatchers.IO) {
+                        conversations.map { entity ->
+                            val contactInfo = synchronized(contactNameCache) {
+                                contactNameCache.getOrPut(entity.sender) { contactNameResolver.contactInfoFor(entity.sender) }
+                            }
+                            ConversationUi(
+                                sender = entity.sender,
+                                displayName = contactInfo.displayName ?: entity.sender,
+                                photoUri = contactInfo.photoUri,
+                                text = entity.text,
+                                createdAt = entity.createdAt,
+                            )
                         }
-                        ConversationUi(
-                            sender = entity.sender,
-                            displayName = contactInfo.displayName ?: entity.sender,
-                            photoUri = contactInfo.photoUri,
-                            text = entity.text,
-                            createdAt = entity.createdAt,
-                        )
                     }
+                } finally {
+                    if (isFirstEmission) Trace.endSection()
                 }
                 if (isFirstEmission) {
                     val sinceCreatedMs = (emissionReceivedAtNanos - createdAtNanos) / 1_000_000

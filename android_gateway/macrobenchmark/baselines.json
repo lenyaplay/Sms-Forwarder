@@ -1,0 +1,44 @@
+{
+  "_comment": "Spec 0030. Min/max ranges from 5 baseline runs per metric. A later run falling outside [min, max] is a regression (worse) or a progression (better) worth investigating, not automatically failing the test. IMPORTANT: these numbers are from the rootable_api35 emulator (google/sdk_gphone64_x86_64), NOT the physical TECNO LI9 - the physical device hangs inside Macrobenchmark's own ProfileInstaller reset step between iterations (confirmed via logcat, not app-code bug - see spec 0030 'Результаты'). Emulator numbers validate the measurement pipeline end-to-end but are not representative of real device performance and must not be used as the real regression baseline until re-measured on TECNO LI9 (or another physical device).",
+  "categories": {
+    "activity_compose_cold_start": {
+      "benchmark": "ColdStartBenchmark#coldStartToFirstRealRow",
+      "device": "rootable_api35 emulator (NOT representative - see _comment)",
+      "metrics": {
+        "timeToInitialDisplayMs": { "min": 1194.9062, "max": 1357.6278, "median": 1234.3657 },
+        "first_real_rowSumMs": { "min": 3.0029, "max": 12.5713, "median": 5.4434 }
+      }
+    },
+    "compose_recomposition_layout_draw": {
+      "benchmark": "ComposeFrameBenchmark#scrollConversationsListSteadyState",
+      "device": "rootable_api35 emulator (NOT representative - see _comment)",
+      "metrics": {
+        "frameCount": { "min": 141.0, "max": 155.0, "median": 148.0 },
+        "frameDurationCpuMs": { "P50": 26.6299, "P90": 35.7782, "P95": 39.8662, "P99": 51.2226 }
+      },
+      "status": "Fixed via TestMessageSeeder (spec 0030 follow-up): the emulator had no real SMS history, so the conversations list was empty and the scroll produced zero frames. Seeded 30 synthetic messages (distinct senders) via `content insert` before the run - frameCount went from 1 (degenerate/failing) to 141-155 (real, reproducible scroll). Compose:recompose/Layout/Draw TraceSectionMetric still read 0 across all runs - the Compose runtime trace sections this relies on are apparently not emitted (or not named as expected) on this Compose/AGP version; open item, not caused by empty data."
+    },
+    "cold_scroll_first_frames": {
+      "benchmark": "ColdScrollJankBenchmark#firstColdSwipeFrameCost",
+      "device": "rootable_api35 emulator (NOT representative - see _comment)",
+      "metrics": {
+        "frameDurationCpuMs": { "P50": 38.65615, "P90": 370.65258, "P95": 389.76676, "P99": 408.858838 },
+        "frameOverrunMs": { "P50": 41.779524, "P90": 377.5622448, "P95": 393.7622156, "P99": 406.76409882 }
+      }
+    },
+    "content_sms_and_file_io": {
+      "benchmark": "SmsImportBenchmark#fullHistoryImport",
+      "device": "rootable_api35 emulator (NOT representative - see _comment)",
+      "metrics": {
+        "sms_history_querySumMs": { "min": 22.3243, "max": 99.3173, "median": 46.7623 },
+        "sms_history_room_writeSumMs": { "min": 2.7274, "max": 19.4121, "median": 6.1023 }
+      }
+    },
+    "jit_vs_aot": {
+      "benchmark": "CompilationModeBenchmark#coldStartJitOnly / #coldStartFullAot",
+      "device": "not yet run",
+      "metrics": {},
+      "status": "Not measured this session on either device - deferred, see spec 0030 'Открытые вопросы'."
+    }
+  }
+}
