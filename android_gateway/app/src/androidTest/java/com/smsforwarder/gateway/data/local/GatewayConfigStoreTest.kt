@@ -25,40 +25,39 @@ class GatewayConfigStoreTest {
         store = GatewayConfigStore(context)
     }
 
-    @Test
-    fun defaultsMatchThePreviouslyHardcodedConstants() {
-        assertEquals(10, store.retryMaxAttempts())
-        assertEquals(30L, store.retryBaseIntervalSeconds())
-        assertEquals(BackoffPolicy.EXPONENTIAL, store.retryBackoffPolicy())
+    private data class ConfigField<T>(
+        val name: String,
+        val default: T,
+        val sample: T,
+        val getter: (GatewayConfigStore) -> T,
+        val setter: (GatewayConfigStore, T) -> Unit,
+    )
+
+    private val configFields = listOf(
+        ConfigField("retryMaxAttempts", 10, 5, { it.retryMaxAttempts() }, { s, v -> s.setRetryMaxAttempts(v) }),
+        ConfigField("retryBaseIntervalSeconds", 30L, 120L, { it.retryBaseIntervalSeconds() }, { s, v -> s.setRetryBaseIntervalSeconds(v) }),
+        ConfigField(
+            "retryBackoffPolicy",
+            BackoffPolicy.EXPONENTIAL,
+            BackoffPolicy.LINEAR,
+            { it.retryBackoffPolicy() },
+            { s, v -> s.setRetryBackoffPolicy(v) },
+        ),
+        ConfigField("forwardingPaused", false, true, { it.isForwardingPaused() }, { s, v -> s.setForwardingPaused(v) }),
+        ConfigField("deleteAfterForward", false, true, { it.deleteAfterForward() }, { s, v -> s.setDeleteAfterForward(v) }),
+        ConfigField("hideContactNameInPayload", true, false, { it.hideContactNameInPayload() }, { s, v -> s.setHideContactNameInPayload(v) }),
+        ConfigField("diagnosticsEnabled", false, true, { it.isDiagnosticsEnabled() }, { s, v -> s.setDiagnosticsEnabled(v) }),
+    )
+
+    private fun <T> verify(field: ConfigField<T>) {
+        assertEquals("${field.name} default", field.default, field.getter(store))
+        field.setter(store, field.sample)
+        assertEquals("${field.name} round-trip", field.sample, field.getter(store))
     }
 
     @Test
-    fun retryMaxAttemptsRoundTrips() {
-        store.setRetryMaxAttempts(5)
-        assertEquals(5, store.retryMaxAttempts())
-    }
-
-    @Test
-    fun retryBaseIntervalSecondsRoundTrips() {
-        store.setRetryBaseIntervalSeconds(120L)
-        assertEquals(120L, store.retryBaseIntervalSeconds())
-    }
-
-    @Test
-    fun retryBackoffPolicyRoundTrips() {
-        store.setRetryBackoffPolicy(BackoffPolicy.LINEAR)
-        assertEquals(BackoffPolicy.LINEAR, store.retryBackoffPolicy())
-    }
-
-    @Test
-    fun forwardingPausedDefaultsToFalse() {
-        assertEquals(false, store.isForwardingPaused())
-    }
-
-    @Test
-    fun forwardingPausedRoundTrips() {
-        store.setForwardingPaused(true)
-        assertEquals(true, store.isForwardingPaused())
+    fun eachConfigFieldDefaultsCorrectlyAndRoundTripsThroughStorage() {
+        configFields.forEach { verify(it) }
     }
 
     @Test
@@ -86,39 +85,6 @@ class GatewayConfigStoreTest {
         assertEquals(FilterMode.WHITELIST, store.filterMode(FilterStage.FORWARDING))
         assertTrue(store.isHistoryImported())
         assertEquals(42L, store.lastSyncedSmsRowId())
-    }
-
-    @Test
-    fun deleteAfterForwardDefaultsToFalse() {
-        assertEquals(false, store.deleteAfterForward())
-    }
-
-    @Test
-    fun deleteAfterForwardRoundTrips() {
-        store.setDeleteAfterForward(true)
-        assertEquals(true, store.deleteAfterForward())
-    }
-
-    @Test
-    fun hideContactNameInPayloadDefaultsToTrue() {
-        assertEquals(true, store.hideContactNameInPayload())
-    }
-
-    @Test
-    fun hideContactNameInPayloadRoundTrips() {
-        store.setHideContactNameInPayload(false)
-        assertEquals(false, store.hideContactNameInPayload())
-    }
-
-    @Test
-    fun diagnosticsEnabledDefaultsToFalse() {
-        assertEquals(false, store.isDiagnosticsEnabled())
-    }
-
-    @Test
-    fun diagnosticsEnabledRoundTrips() {
-        store.setDiagnosticsEnabled(true)
-        assertEquals(true, store.isDiagnosticsEnabled())
     }
 
     // SharedPreferences dispatches OnSharedPreferenceChangeListener callbacks

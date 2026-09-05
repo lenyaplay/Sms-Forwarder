@@ -23,17 +23,27 @@ private const val TARGET_PACKAGE = "com.smsforwarder.gateway"
  * [RealScreenSteadyStateFrameCostTest]/[SteadyStateFrameCostTest]'s raw
  * `Choreographer` millisecond harness with Macrobenchmark's `FrameTimingMetric`.
  *
- * The per-phase breakdown (recompose/layout/draw, not just total frame cost) is
- * attempted via `TraceSectionMetric` on Compose runtime's OWN trace sections
- * (`Compose:recompose`, `Compose:Layout`, `Compose:Draw`) - not a hand-rolled
- * counter. Spec 0025's manual `recompositionCount` approach failed (constant
- * `1` across every run, uninformative) precisely because it counted
- * recomposition itself instead of reading the trace Compose's runtime already
- * emits; this reuses that existing instrumentation instead of reinventing it.
- * If a live run shows one of these sections isn't actually present in the
- * captured Perfetto trace on TECNO LI9, that must be recorded honestly in the
- * spec's "Результаты" (see spec 0030's Допущение про категорию 2), not
- * silently dropped.
+ * A per-phase breakdown via `TraceSectionMetric` on Compose runtime's OWN
+ * trace sections (`Compose:recompose`/`Compose:Layout`/`Compose:Draw`) does
+ * not work: `Compose:Layout`/`Compose:Draw` are not real section names this
+ * Compose runtime version emits at all (confirmed by direct Perfetto trace
+ * inspection, 2026-09-05), and `Compose:recompose` - though genuinely present
+ * in the trace - is only aggregated by `TraceSectionMetric` when composition
+ * tracing (`androidx.compose.runtime:runtime-tracing` +
+ * `androidx.benchmark.fullTracing.enable`) is active, which this project has
+ * chosen not to add (per-composable granularity isn't worth the APK-size
+ * cost).
+ *
+ * Instead: two manual `Trace.beginSection`/`endSection` wraps in
+ * `ConversationsScreen.kt` (`ConversationRow`, the whole list row including
+ * swipe/click/menu chrome, and `ConversationRowContent`, just the leaf
+ * avatar/name/text/time content), gated on
+ * `BuildConfig.ENABLE_COMPOSABLE_TRACING` (a dedicated build-time flag, not
+ * `BuildConfig.DEBUG` - this benchmark measures `:app`'s `release` variant
+ * directly, where DEBUG is always false). Comparing the two gives a rough
+ * split between "row chrome" cost and "actual content rendering" cost. This
+ * only measures anything when `:app` is built with
+ * `-Penable_composable_tracing=true` - see spec 0030 for how to invoke that.
  */
 @OptIn(ExperimentalMetricApi::class)
 @RunWith(AndroidJUnit4::class)
@@ -47,9 +57,8 @@ class ComposeFrameBenchmark {
         packageName = TARGET_PACKAGE,
         metrics = listOf(
             FrameTimingMetric(),
-            TraceSectionMetric("Compose:recompose", TraceSectionMetric.Mode.Sum),
-            TraceSectionMetric("Compose:Layout", TraceSectionMetric.Mode.Sum),
-            TraceSectionMetric("Compose:Draw", TraceSectionMetric.Mode.Sum),
+            TraceSectionMetric("ConversationRow", TraceSectionMetric.Mode.Sum),
+            TraceSectionMetric("ConversationRowContent", TraceSectionMetric.Mode.Sum),
         ),
         iterations = 5,
         startupMode = StartupMode.WARM,

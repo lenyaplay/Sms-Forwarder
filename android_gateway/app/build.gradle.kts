@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
     alias(libs.plugins.baselineprofile)
+    alias(libs.plugins.roborazzi)
 }
 
 // Release signing credentials live in a git-ignored keystore.properties (see
@@ -36,6 +37,18 @@ android {
         // backend + adb reverse, see docs/specs/0009-real-backend-integration-tests.md)
         // from the default connectedAndroidTest run.
         testInstrumentationRunnerArguments["notPackage"] = "com.smsforwarder.gateway.realbackend"
+
+        // Spec 0030: manual per-composable androidx.compose.runtime.trace() wraps
+        // (ConversationsScreen.kt) are gated on this instead of BuildConfig.DEBUG,
+        // because :macrobenchmark measures :app's release variant directly - a
+        // DEBUG-gated flag would never fire in a real benchmark run. Off by
+        // default; pass -Penable_composable_tracing=true to turn it on for a
+        // benchmark build (release included).
+        buildConfigField(
+            "boolean",
+            "ENABLE_COMPOSABLE_TRACING",
+            (project.findProperty("enable_composable_tracing") == "true").toString(),
+        )
     }
 
     signingConfigs {
@@ -69,6 +82,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -92,6 +106,10 @@ android {
 
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+roborazzi {
+    outputDir.set(file("src/test/snapshots"))
 }
 
 dependencies {
@@ -132,6 +150,9 @@ dependencies {
 
     implementation(libs.metrics.performance)
     implementation(libs.profileinstaller)
+    // Spec 0030: manual per-composable Trace.beginSection/endSection wraps
+    // (ConversationsScreen.kt), gated on BuildConfig.ENABLE_COMPOSABLE_TRACING.
+    implementation(libs.tracing)
 
     implementation(libs.coil.compose)
 
@@ -144,6 +165,12 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.room.testing)
     testImplementation(libs.work.testing)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.espresso.core)

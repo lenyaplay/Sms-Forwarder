@@ -7,6 +7,7 @@ import androidx.compose.ui.test.performClick
 import com.smsforwarder.gateway.data.local.db.FilterMode
 import com.smsforwarder.gateway.data.local.db.FilterRuleEntity
 import com.smsforwarder.gateway.data.local.db.FilterStage
+import com.smsforwarder.gateway.ui.common.ConfirmDialogTestTags
 import org.junit.Rule
 import org.junit.Test
 
@@ -94,7 +95,7 @@ class FilterRulesScreenTest {
     }
 
     @Test
-    fun deleteViaSwipeConfirmInvokesOnDeleteRule() {
+    fun enabledSwitchClickInvokesOnToggleEnabled() {
         val actions = RecordingActions()
         val r = rule(id = 5L)
         composeRule.setContent {
@@ -110,6 +111,44 @@ class FilterRulesScreenTest {
         composeRule.onNodeWithTag(FilterRulesTestTags.enabledSwitch(5L)).performClick()
 
         assert(actions.toggledRule == r)
+    }
+
+    @Test
+    fun deleteButtonThenConfirmInvokesOnDeleteRule() {
+        val actions = RecordingActions()
+        composeRule.setContent {
+            FilterRulesContent(
+                uiState = FilterRulesUiState(rules = listOf(rule(id = 5L))),
+                actions = actions,
+                onBack = {},
+                onAddRule = {},
+                onEditRule = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(FilterRulesTestTags.deleteButton(5L), useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag(ConfirmDialogTestTags.CONFIRM_BUTTON).performClick()
+
+        assert(actions.deletedId == 5L)
+    }
+
+    @Test
+    fun deleteButtonThenDismissDoesNotInvokeOnDeleteRule() {
+        val actions = RecordingActions()
+        composeRule.setContent {
+            FilterRulesContent(
+                uiState = FilterRulesUiState(rules = listOf(rule(id = 5L))),
+                actions = actions,
+                onBack = {},
+                onAddRule = {},
+                onEditRule = { _, _ -> },
+            )
+        }
+
+        composeRule.onNodeWithTag(FilterRulesTestTags.deleteButton(5L), useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag(ConfirmDialogTestTags.DISMISS_BUTTON).performClick()
+
+        assert(actions.deletedId == null)
     }
 
     @Test

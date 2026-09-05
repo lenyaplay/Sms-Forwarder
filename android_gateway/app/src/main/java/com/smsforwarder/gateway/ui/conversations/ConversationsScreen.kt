@@ -1,6 +1,8 @@
 package com.smsforwarder.gateway.ui.conversations
 
+import com.smsforwarder.gateway.BuildConfig
 import androidx.activity.compose.BackHandler
+import androidx.tracing.Trace
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -334,6 +336,27 @@ fun ConversationsContent(
     }
 }
 
+/**
+ * Wraps [block] in an `androidx.tracing.Trace` section only when
+ * [BuildConfig.ENABLE_COMPOSABLE_TRACING] is on (spec 0030, category 2) - gated
+ * on a dedicated build-time flag rather than `BuildConfig.DEBUG` because
+ * `:macrobenchmark` measures `:app`'s `release` variant directly, where DEBUG
+ * is always false. `androidx.compose.runtime.trace` (the built-in
+ * composable-scoped tracer) is `internal` to compose-runtime and not usable
+ * here - `Trace.beginSection`/`endSection` is the public equivalent. `inline`
+ * keeps [block] composable at the call site.
+ */
+@Composable
+private inline fun maybeTrace(name: String, block: @Composable () -> Unit) {
+    // No try/finally: the Kotlin compiler rejects try/finally around a
+    // composable call ("Try catch is not supported around composable function
+    // invocations"). Matches the pattern Compose's own compiler-generated
+    // composition tracing uses for the same reason.
+    if (BuildConfig.ENABLE_COMPOSABLE_TRACING) Trace.beginSection(name)
+    block()
+    if (BuildConfig.ENABLE_COMPOSABLE_TRACING) Trace.endSection()
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationRow(
@@ -342,7 +365,7 @@ private fun ConversationRow(
     onOpenThread: (String, Long?) -> Unit,
     onArchiveToggle: (String) -> Unit,
     onDeleteRequested: (String) -> Unit,
-) {
+) = maybeTrace("ConversationRow") {
     var showMenu by remember { mutableStateOf(false) }
     val dismissState = rememberSwipeToDismissBoxState(
         // Default (0.5) reacts to a fairly short drag - easy to trigger by accident
@@ -431,7 +454,7 @@ private fun ConversationRowContent(
     text: AnnotatedString,
     timestampText: String,
     modifier: Modifier = Modifier,
-) {
+) = maybeTrace("ConversationRowContent") {
     Column(
         modifier = modifier
             .fillMaxWidth()

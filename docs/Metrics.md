@@ -29,6 +29,7 @@ DER = Баги на Production / (Баги на Stage + Баги на Production
 |---|---|---|---|---|---|
 | 1 | 2026-09-04 | `simIndicatorIsShown...` androidTest падал: `assertIsDisplayed` = "not displayed", хотя элемент реально был на экране | Stage | 0029 (до коммита) | Тег висел на `Text` внутри `combinedClickable`-модификатора родителя — семантика сливается в родительский узел (merged tree), нужен `useUnmergedTree = true`, как уже сделано в `ConversationsScreenTest` для похожего случая |
 | 2 | 2026-09-04 | `ThreadScreenTest`'s `bubble(id)`-тесты (несколько) падали: `onNodeWithTag` не находил узел / `assertIsDisplayed` = "not displayed" | Stage | 0031 (до коммита, при переносе `combinedClickable` с `Column` на родительский `Row` по замечанию пользователя "кликать по всей полосе") | Тот же класс проблемы, что и запись #1 (merged semantics tree) — `combinedClickable` на родителе сливает дочерний `testTag` в родительский узел; исправлено `useUnmergedTree = true` во всех затронутых поисках по тегу `bubble(...)` |
+| 3 | 2026-09-05 | `tools/ui-metrics`: `test_does_not_crash_on_a_small_image` (`test_symmetry.py`) падал с `ValueError: win_size exceeds image extent` | Stage | 0033, Stage C (до коммита) | `skimage.metrics.structural_similarity` по умолчанию требует обе стороны изображения ≥ 7px (default `win_size=7`); тестовая фикстура 4×4 меньше — исправлено явным `win_size` (наибольшее нечётное, помещающееся в меньшую сторону) для изображений < 7px в `mirror_symmetry()` |
 
 ## Текущий DER
 

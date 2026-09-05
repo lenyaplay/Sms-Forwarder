@@ -1,0 +1,21 @@
+numpy
+opencv-contrib-python
+scikit-image
+pytest
+
+# Stage C saliency (DeepGaze) - torch is heavy (~600MB incl. model weights,
+# downloaded on first call) but required now that DeepGaze won the bake-off
+# (spec 0033 Допущение 9); import stays lazy inside ui_metrics/saliency.py
+# so importing the package itself doesn't force it (Допущение 11).
+#
+# Both git+https installs are pinned to a specific commit (not a branch/tag)
+# for reproducibility - neither project publishes to PyPI, so this repo is
+# the only version pin available. Accepted supply-chain risk (spec 0033
+# Результаты, Stage C): these are third-party GitHub repos, not vetted
+# packages - re-pin deliberately if either needs an update.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+einops
+git+https://github.com/openai/CLIP.git@d05afc436d78f1c48dc0dbf8e5980a9d471f35f6
+git+https://github.com/matthias-k/DeepGaze.git@c7db17e2d1d7ea6468ffdee2cfaddf141095dcff
