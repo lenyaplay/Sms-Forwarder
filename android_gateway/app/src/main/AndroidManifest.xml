@@ -56,6 +56,12 @@
             </intent-filter>
         </receiver>
 
+        <!-- Spec 0038: only ever triggered by our own PendingIntent from a
+             notification action button, never by the system - not exported. -->
+        <receiver
+            android:name=".sms.CopyOtpCodeReceiver"
+            android:exported="false" />
+
         <service
             android:name=".sms.RespondViaMessageService"
             android:exported="true"

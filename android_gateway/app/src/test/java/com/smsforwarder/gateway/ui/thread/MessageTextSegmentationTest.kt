@@ -42,6 +42,14 @@ class MessageTextSegmentationTest {
     }
 
     @Test
+    fun `dash-split number totaling fewer than 6 digits is not otp`() {
+        // Reads as a date/range (e.g. "13-23"), not a code - only a full 6-digit
+        // code split by a dash (e.g. "204-503") is a real-world OTP format.
+        val segments = segmentMessageText("meeting is 13-23 this week")
+        assertTrue(segments.none { it is TextSegment.Otp })
+    }
+
+    @Test
     fun `digit run not on a word boundary is not otp`() {
         val segments = segmentMessageText("id12345x")
         assertTrue(segments.none { it is TextSegment.Otp })

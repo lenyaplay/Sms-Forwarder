@@ -19,9 +19,11 @@ private val phoneRegex = Regex("""\+?(?:\d[\s-]?){7,}\d""")
 // Standalone (word-boundary) 4-6 digit run, optionally split by a single dash (some
 // senders format OTPs as e.g. "204-503"). Spec 0031 decision: any such number is
 // treated as OTP, no context-word heuristic - false positives on times/years are an
-// accepted tradeoff, not a defect. The dash-split alternative is filtered by total
-// digit count below, since the regex alone can't count digits across both groups.
-private val otpRegex = Regex("""\b\d{4,6}\b|\b\d{1,3}-\d{1,3}\b""")
+// accepted tradeoff, not a defect. The dash-split alternative is restricted to
+// totaling exactly 6 digits (not just 4-6 like the plain run) - a 2-2 or 1-3 split
+// like "13-23" reads as a date/range, not an OTP; senders only seem to dash-split
+// full 6-digit codes in practice (e.g. "204-503"), never shorter ones.
+private val otpRegex = Regex("""\b\d{4,6}\b|\b\d{1,5}-\d{1,5}\b""")
 
 /** Segments [text] into plain/link/phone/otp runs. Checked in that priority order so ranges never overlap. */
 fun segmentMessageText(text: String): List<TextSegment> {
@@ -37,7 +39,9 @@ fun segmentMessageText(text: String): List<TextSegment> {
     }
     otpRegex.findAll(text).forEach { match ->
         val digitCount = match.value.count { it.isDigit() }
-        if (digitCount in 4..6 && found.none { it.first.overlaps(match.range) }) {
+        val isDashSplit = '-' in match.value
+        val validDigitCount = if (isDashSplit) digitCount == 6 else digitCount in 4..6
+        if (validDigitCount && found.none { it.first.overlaps(match.range) }) {
             found += match.range to { s: String -> TextSegment.Otp(s, s.filter { it.isDigit() }) }
         }
     }

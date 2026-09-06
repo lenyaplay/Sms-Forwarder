@@ -3,6 +3,7 @@ package com.smsforwarder.gateway.ui.thread
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -116,6 +117,13 @@ fun ThreadScreen(viewModel: ThreadViewModel = hiltViewModel(), onBack: () -> Uni
     val uiState by viewModel.uiState.collectAsState()
     var showDeleteConversationConfirm by remember { mutableStateOf(false) }
     var showDeleteSelectedConfirm by remember { mutableStateOf(false) }
+
+    // Spec 0037: with messages selected, back should back out of selection mode
+    // first (matching the existing close-button behavior) rather than immediately
+    // leaving the thread - only the second back press does the real navigation.
+    BackHandler(enabled = uiState.isSelectionMode) {
+        viewModel.onClearSelection()
+    }
 
     Scaffold(
         topBar = {

@@ -11,6 +11,8 @@ import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import com.smsforwarder.gateway.MainActivity
+import com.smsforwarder.gateway.ui.thread.TextSegment
+import com.smsforwarder.gateway.ui.thread.segmentMessageText
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
@@ -40,7 +42,9 @@ class IncomingSmsNotifier @Inject constructor(
             return
         }
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notificationId = nextId.getAndIncrement()
+
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.sym_action_email)
             .setContentTitle(sender)
             .setContentText(text)
@@ -66,10 +70,38 @@ class IncomingSmsNotifier @Inject constructor(
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 )
             )
-            .build()
+
+        // Spec 0038: at most the first 2 OTP codes found (by order of appearance),
+        // each as its own "copy" action button - reuses the same segmentation the
+        // thread screen already highlights OTPs with, not a separate regex.
+        val otpCodes = segmentMessageText(text).filterIsInstance<TextSegment.Otp>().take(2)
+        otpCodes.forEachIndexed { index, segment ->
+            val label = if (otpCodes.size == 1) "Скопировать код" else "Скопировать код ${index + 1}"
+            builder.addAction(
+                0,
+                label,
+                PendingIntent.getBroadcast(
+                    context,
+                    // requestCode salted by this notification's own id (not just
+                    // sender+index) - PendingIntent matching ignores extras, so two
+                    // OTP messages from the SAME sender arriving back to back would
+                    // otherwise share one requestCode (sender.hashCode()*31+index is
+                    // identical for both) and FLAG_UPDATE_CURRENT would silently
+                    // rewrite the still-visible FIRST notification's button to copy
+                    // the SECOND message's code instead - a real bug caught in
+                    // peer review, not by the tests (which only ever call
+                    // notifyIncoming once per case). notificationId is unique per
+                    // call (AtomicInteger), so this can't happen anymore.
+                    notificationId * 2 + index,
+                    Intent(context, CopyOtpCodeReceiver::class.java)
+                        .putExtra(CopyOtpCodeReceiver.EXTRA_CODE, segment.code),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                ),
+            )
+        }
 
         context.getSystemService(NotificationManager::class.java)
-            .notify(nextId.getAndIncrement(), notification)
+            .notify(notificationId, builder.build())
     }
 
     private companion object {
