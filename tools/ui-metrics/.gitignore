@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+# compare_weights.py output (spec 0034) - one-off decision-support visuals
+# for the product owner, not a committed baseline artifact.
+out/

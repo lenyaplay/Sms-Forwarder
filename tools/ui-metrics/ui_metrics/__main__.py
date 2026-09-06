@@ -1,7 +1,11 @@
 """CLI: python -m ui_metrics <path-to-png-or-directory>
 
-Spec 0033, Stages B+C. Prints colorfulness, feature_congestion, saliency
-score, mirror symmetry, and visual balance for each PNG.
+Spec 0033, Stages B+C. Prints colorfulness, feature_congestion, and saliency
+score for each PNG. Balance/symmetry moved to exact Ngo/Teo/Byrne (2003)
+formulas over Compose semantics geometry (spec 0034, Milestone 29) - see
+`python -m ui_metrics.compare_weights <snapshots-dir>` instead; the old
+pixel-based `symmetry.py` heuristic was deleted as no longer useful once the
+exact formulas were available.
 """
 import sys
 from pathlib import Path
@@ -11,7 +15,6 @@ import cv2
 from ui_metrics.colorfulness import colorfulness
 from ui_metrics.feature_congestion import feature_congestion
 from ui_metrics.saliency import deepgaze_saliency, saliency_score
-from ui_metrics.symmetry import mirror_symmetry, visual_balance
 
 
 def _load_rgb(path: Path):
@@ -46,7 +49,7 @@ def main(argv=None) -> int:
 
     header = (
         f"{'file':<70} {'colorfulness':>14} {'feature_congestion':>20} "
-        f"{'saliency':>10} {'symmetry':>10} {'balance':>10}"
+        f"{'saliency':>10}"
     )
     print(header)
     for file_path in files:
@@ -58,11 +61,9 @@ def main(argv=None) -> int:
             cf = colorfulness(image)
             fc = feature_congestion(image)
             sal = saliency_score(deepgaze_saliency(image))
-            sym = mirror_symmetry(image)
-            bal = visual_balance(image)
             print(
                 f"{file_path.name:<70} {cf:>14.3f} {fc:>20.3f} "
-                f"{sal:>10.3f} {sym:>10.3f} {bal:>10.3f}"
+                f"{sal:>10.3f}"
             )
         except Exception as e:
             print(f"{file_path.name:<70} ERROR: {e}")

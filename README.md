@@ -53,7 +53,7 @@ go run ./cmd/server
 
 ## Статус
 
-Актуальный статус разработки по этапам — в [docs/roadmaps/Roadmap 2.md](docs/roadmaps/Roadmap%202.md) (завершённые этапы — в [docs/roadmaps/Roadmap Archived 1.md](docs/roadmaps/Roadmap%20Archived%201.md)), не дублируется здесь. Архитектурные решения — в [docs/Architecture.md](docs/Architecture.md), правила разработки и тестирования — в [docs/Development.md](docs/Development.md), спецификации фич — в [docs/specs/](docs/specs/).
+Актуальный статус разработки по этапам — в [docs/roadmaps/Roadmap 3.md](docs/roadmaps/Roadmap%203.md) (завершённые этапы — в [docs/roadmaps/Roadmap Archived 2.md](docs/roadmaps/Roadmap%20Archived%202.md) и [docs/roadmaps/Roadmap Archived 1.md](docs/roadmaps/Roadmap%20Archived%201.md)), не дублируется здесь. Архитектурные решения — в [docs/Architecture.md](docs/Architecture.md), правила разработки и тестирования — в [docs/Development.md](docs/Development.md), спецификации фич — в [docs/specs/](docs/specs/).
 
 ## Лицензии и сторонние зависимости
 

@@ -10,11 +10,14 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.MessageDirection
 import com.smsforwarder.gateway.data.local.db.MessageEntity
+import com.smsforwarder.gateway.ui.tooling.exportGeometry
+import com.smsforwarder.gateway.ui.tooling.writeGeometryJson
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.GraphicsMode
+import java.io.File
 
 // Spec 0033, Stage A: Roborazzi baseline snapshots of ThreadContent, both themes.
 @RunWith(RobolectricTestRunner::class)
@@ -54,7 +57,7 @@ class ThreadScreenSnapshotTest {
         message(3L, MessageDirection.IN, "Your code is 123456"),
     )
 
-    private fun capture(dark: Boolean) {
+    private fun capture(dark: Boolean, methodName: String) {
         composeRule.setContent {
             MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
                 Surface(color = MaterialTheme.colorScheme.background) {
@@ -67,12 +70,20 @@ class ThreadScreenSnapshotTest {
         }
         // See ConversationsScreenSnapshotTest for why auto-naming (no explicit
         // filePath) is used - it's the one that honors roborazzi { outputDir }.
-        composeRule.onRoot().captureRoboImage()
+        val root = composeRule.onRoot()
+        root.captureRoboImage()
+        // Spec 0034 (Milestone 29): geometry sidecar, see ConversationsScreenSnapshotTest.
+        writeGeometryJson(
+            outputDir = File("src/test/snapshots"),
+            testClassFqcn = "com.smsforwarder.gateway.ui.thread.ThreadScreenSnapshotTest",
+            testMethodName = methodName,
+            geometry = exportGeometry(root.fetchSemanticsNode()),
+        )
     }
 
     @Test
-    fun threadLight() = capture(dark = false)
+    fun threadLight() = capture(dark = false, methodName = "threadLight")
 
     @Test
-    fun threadDark() = capture(dark = true)
+    fun threadDark() = capture(dark = true, methodName = "threadDark")
 }

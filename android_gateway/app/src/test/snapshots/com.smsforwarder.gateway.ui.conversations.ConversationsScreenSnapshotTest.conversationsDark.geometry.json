@@ -1,0 +1,46 @@
+{
+    "screenWidth": 320.0,
+    "screenHeight": 470.0,
+    "objects": [
+        {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 320.0,
+            "height": 470.0,
+            "isTextual": false,
+            "isInteractive": false
+        },
+        {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 320.0,
+            "height": 243.0,
+            "isTextual": false,
+            "isInteractive": false
+        },
+        {
+            "x": 8.0,
+            "y": 8.0,
+            "width": 304.0,
+            "height": 69.0,
+            "isTextual": true,
+            "isInteractive": true
+        },
+        {
+            "x": 8.0,
+            "y": 77.0,
+            "width": 304.0,
+            "height": 69.0,
+            "isTextual": true,
+            "isInteractive": true
+        },
+        {
+            "x": 8.0,
+            "y": 146.0,
+            "width": 304.0,
+            "height": 89.0,
+            "isTextual": true,
+            "isInteractive": true
+        }
+    ]
+}

@@ -40,9 +40,9 @@ def deepgaze_saliency(image: np.ndarray) -> np.ndarray:
 
     Lazy-imports torch/DeepGaze so importing this module never requires
     PyTorch to be installed unless this function is actually called (spec
-    0033 Допущение 11) - keeps `colorfulness`/`feature_congestion`/
-    `symmetry` usable without the ~600MB of DeepGaze model weights. The
-    model itself is cached after the first call (see `_load_model`).
+    0033 Допущение 11) - keeps `colorfulness`/`feature_congestion`
+    usable without the ~600MB of DeepGaze model weights. The model itself
+    is cached after the first call (see `_load_model`).
     """
     import torch
 

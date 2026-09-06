@@ -7,11 +7,14 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.smsforwarder.gateway.ui.tooling.exportGeometry
+import com.smsforwarder.gateway.ui.tooling.writeGeometryJson
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.GraphicsMode
+import java.io.File
 
 // Spec 0033, Stage A: Roborazzi baseline snapshots of ConversationsContent, both
 // themes. photoUri intentionally null on every fake conversation - ContactAvatar
@@ -48,7 +51,7 @@ class ConversationsScreenSnapshotTest {
         ),
     )
 
-    private fun capture(dark: Boolean) {
+    private fun capture(dark: Boolean, methodName: String) {
         composeRule.setContent {
             MaterialTheme(colorScheme = if (dark) darkColorScheme() else lightColorScheme()) {
                 Surface(color = MaterialTheme.colorScheme.background) {
@@ -64,12 +67,21 @@ class ConversationsScreenSnapshotTest {
         // Gradle config in this version (1.30.0) and lands at the module root instead -
         // confirmed by a throwaway spike. Auto-naming (test class + method) does honor
         // outputDir, so it's used here despite the less readable resulting filename.
-        composeRule.onRoot().captureRoboImage()
+        val root = composeRule.onRoot()
+        root.captureRoboImage()
+        // Spec 0034 (Milestone 29): geometry sidecar for tools/ui-metrics's exact
+        // Ngo/Teo/Byrne BM/EM/SYM formulas - see ui/tooling/SemanticsGeometryExport.kt.
+        writeGeometryJson(
+            outputDir = File("src/test/snapshots"),
+            testClassFqcn = "com.smsforwarder.gateway.ui.conversations.ConversationsScreenSnapshotTest",
+            testMethodName = methodName,
+            geometry = exportGeometry(root.fetchSemanticsNode()),
+        )
     }
 
     @Test
-    fun conversationsLight() = capture(dark = false)
+    fun conversationsLight() = capture(dark = false, methodName = "conversationsLight")
 
     @Test
-    fun conversationsDark() = capture(dark = true)
+    fun conversationsDark() = capture(dark = true, methodName = "conversationsDark")
 }
