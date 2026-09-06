@@ -3,7 +3,7 @@
 Spec 0033, Stages B+C. Prints colorfulness, feature_congestion, and saliency
 score for each PNG. Balance/symmetry moved to exact Ngo/Teo/Byrne (2003)
 formulas over Compose semantics geometry (spec 0034, Milestone 29) - see
-`python -m ui_metrics.compare_weights <snapshots-dir>` instead; the old
+`python -m ui_metrics.apb_report <snapshots-dir>` instead; the old
 pixel-based `symmetry.py` heuristic was deleted as no longer useful once the
 exact formulas were available.
 """

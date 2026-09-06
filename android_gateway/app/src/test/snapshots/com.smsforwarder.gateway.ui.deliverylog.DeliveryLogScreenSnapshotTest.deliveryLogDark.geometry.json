@@ -1,0 +1,126 @@
+{
+    "screenWidth": 320.0,
+    "screenHeight": 470.0,
+    "objects": [
+        {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 320.0,
+            "height": 470.0,
+            "isTextual": false,
+            "isInteractive": false
+        },
+        {
+            "x": 0.0,
+            "y": 64.0,
+            "width": 320.0,
+            "height": 406.0,
+            "isTextual": false,
+            "isInteractive": false
+        },
+        {
+            "x": 16.0,
+            "y": 72.0,
+            "width": 288.0,
+            "height": 38.0,
+            "isTextual": false,
+            "isInteractive": false
+        },
+        {
+            "x": 16.0,
+            "y": 72.0,
+            "width": 179.0,
+            "height": 20.0,
+            "isTextual": true,
+            "isInteractive": false
+        },
+        {
+            "x": 16.0,
+            "y": 94.0,
+            "width": 89.0,
+            "height": 16.0,
+            "isTextual": true,
+            "isInteractive": false
+        },
+        {
+            "x": 16.0,
+            "y": 126.0,
+            "width": 288.0,
+            "height": 56.0,
+            "isTextual": false,
+            "isInteractive": false
+        },
+        {
+            "x": 16.0,
+            "y": 126.0,
+            "width": 176.0,
+            "height": 20.0,
+            "isTextual": true,
+            "isInteractive": false
+        },
+        {
+            "x": 16.0,
+            "y": 148.0,
+            "width": 89.0,
+            "height": 16.0,
+            "isTextual": true,
+            "isInteractive": false
+        },
+        {
+            "x": 16.0,
+            "y": 166.0,
+            "width": 126.0,
+            "height": 16.0,
+            "isTextual": true,
+            "isInteractive": false
+        },
+        {
+            "x": 16.0,
+            "y": 198.0,
+            "width": 288.0,
+            "height": 38.0,
+            "isTextual": false,
+            "isInteractive": false
+        },
+        {
+            "x": 16.0,
+            "y": 198.0,
+            "width": 138.0,
+            "height": 20.0,
+            "isTextual": true,
+            "isInteractive": false
+        },
+        {
+            "x": 16.0,
+            "y": 220.0,
+            "width": 89.0,
+            "height": 16.0,
+            "isTextual": true,
+            "isInteractive": false
+        },
+        {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 320.0,
+            "height": 64.0,
+            "isTextual": false,
+            "isInteractive": false
+        },
+        {
+            "x": 8.0,
+            "y": 12.0,
+            "width": 40.0,
+            "height": 40.0,
+            "isTextual": true,
+            "isInteractive": true
+        },
+        {
+            "x": 56.0,
+            "y": 18.0,
+            "width": 142.0,
+            "height": 28.0,
+            "isTextual": true,
+            "isInteractive": false
+        }
+    ]
+}
