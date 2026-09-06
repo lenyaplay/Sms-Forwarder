@@ -5,12 +5,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.tooling.preview.Preview
+import android.content.res.Configuration
 
 object NewMessageDialogTestTags {
     const val NUMBER_FIELD = "new_message_dialog_number_field"
@@ -46,4 +50,20 @@ fun NewMessageDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
             TextButton(onClick = onDismiss) { Text("Отмена") }
         },
     )
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun NewMessageDialogPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        NewMessageDialog(onDismiss = {}, onConfirm = {})
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun NewMessageDialogPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        NewMessageDialog(onDismiss = {}, onConfirm = {})
+    }
 }

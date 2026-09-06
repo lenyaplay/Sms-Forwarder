@@ -38,11 +38,11 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -59,7 +59,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import android.content.res.Configuration
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -67,6 +69,8 @@ import com.smsforwarder.gateway.ui.common.AVATAR_SIZE
 import com.smsforwarder.gateway.ui.common.highlightedText
 import com.smsforwarder.gateway.ui.common.ConfirmDialog
 import com.smsforwarder.gateway.ui.common.ContactAvatar
+import com.smsforwarder.gateway.ui.common.SwipeAction
+import com.smsforwarder.gateway.ui.common.SwipeActionsRow
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -86,6 +90,8 @@ object ConversationsTestTags {
     const val ROW_MENU_DELETE = "conversations_row_menu_delete"
     fun row(sender: String) = "conversations_row_$sender"
     fun searchResultRow(messageId: Long) = "conversations_search_result_row_$messageId"
+    fun swipeArchiveButton(sender: String) = "conversations_swipe_archive_$sender"
+    fun swipeDeleteButton(sender: String) = "conversations_swipe_delete_$sender"
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -367,42 +373,27 @@ private fun ConversationRow(
     onDeleteRequested: (String) -> Unit,
 ) = maybeTrace("ConversationRow") {
     var showMenu by remember { mutableStateOf(false) }
-    val dismissState = rememberSwipeToDismissBoxState(
-        // Default (0.5) reacts to a fairly short drag - easy to trigger by accident
-        // while scrolling diagonally. Raised (0.75 -> 0.85, per product owner
-        // feedback that 0.75 still triggered too easily) so only a near-full-row
-        // swipe commits the action; a long-press menu below is the non-gesture
-        // equivalent for TalkBack users.
-        positionalThreshold = { totalDistance -> totalDistance * 0.85f },
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    onArchiveToggle(conversation.sender)
-                    false
-                }
-                SwipeToDismissBoxValue.EndToStart -> {
-                    onDeleteRequested(conversation.sender)
-                    false
-                }
-                SwipeToDismissBoxValue.Settled -> true
-            }
-        },
-    )
-    SwipeToDismissBox(
-        state = dismissState,
-        backgroundContent = {
-            val (icon, color) = when (dismissState.dismissDirection) {
-                SwipeToDismissBoxValue.StartToEnd -> (if (isArchivedView) Icons.Default.Inbox else Icons.Default.Archive) to MaterialTheme.colorScheme.primaryContainer
-                SwipeToDismissBoxValue.EndToStart -> Icons.Default.Delete to MaterialTheme.colorScheme.errorContainer
-                SwipeToDismissBoxValue.Settled -> null to MaterialTheme.colorScheme.surface
-            }
-            Box(
-                modifier = Modifier.fillMaxSize().background(color).padding(horizontal = 20.dp),
-                contentAlignment = if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd,
-            ) {
-                icon?.let { Icon(it, contentDescription = null) }
-            }
-        },
+    // Spec 0036: replaced Material3's SwipeToDismissBox (dismiss-on-swipe) with a
+    // reveal gesture - swipe left pins two circular action buttons open instead of
+    // firing an action immediately; the long-press menu below remains the sole
+    // non-gesture/a11y path (SwipeActionsRow's gesture gives TalkBack no action).
+    SwipeActionsRow(
+        actions = listOf(
+            SwipeAction(
+                icon = if (isArchivedView) Icons.Default.Inbox else Icons.Default.Archive,
+                contentDescription = if (isArchivedView) "Показать во входящих" else "Архивировать",
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                testTag = ConversationsTestTags.swipeArchiveButton(conversation.sender),
+                onClick = { onArchiveToggle(conversation.sender) },
+            ),
+            SwipeAction(
+                icon = Icons.Default.Delete,
+                contentDescription = "Удалить",
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                testTag = ConversationsTestTags.swipeDeleteButton(conversation.sender),
+                onClick = { onDeleteRequested(conversation.sender) },
+            ),
+        ),
     ) {
         Box(
             modifier = Modifier
@@ -496,3 +487,62 @@ private val conversationTimeFormat = SimpleDateFormat("dd.MM HH:mm", Locale.getD
 
 private fun formatConversationTime(timestampMillis: Long): String =
     conversationTimeFormat.format(Date(timestampMillis))
+
+// Spec 0035: @Preview for manual design review in Android Studio, no ViewModel/Hilt.
+private val previewConversations = listOf(
+    ConversationUi(sender = "+15551234", displayName = "Alice", photoUri = null, text = "Не забудь про встречу в 15:00", createdAt = 1_700_000_000_000L),
+    ConversationUi(sender = "Bank", displayName = "Bank", photoUri = null, text = "Ваш код подтверждения: 482913", createdAt = 1_700_000_100_000L),
+    ConversationUi(sender = "+15559876", displayName = "+15559876", photoUri = null, text = "Ок, до встречи", createdAt = 1_700_000_200_000L),
+)
+
+@Preview(showBackground = true)
+@Composable
+private fun ConversationsContentPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ConversationsContent(conversations = previewConversations, isImporting = false, onOpenThread = { _, _ -> })
+        }
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ConversationsContentPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ConversationsContent(conversations = previewConversations, isImporting = false, onOpenThread = { _, _ -> })
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ConversationRowPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ConversationRow(
+                conversation = previewConversations[0],
+                isArchivedView = false,
+                onOpenThread = { _, _ -> },
+                onArchiveToggle = {},
+                onDeleteRequested = {},
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ConversationRowPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ConversationRow(
+                conversation = previewConversations[0],
+                isArchivedView = false,
+                onOpenThread = { _, _ -> },
+                onArchiveToggle = {},
+                onDeleteRequested = {},
+            )
+        }
+    }
+}

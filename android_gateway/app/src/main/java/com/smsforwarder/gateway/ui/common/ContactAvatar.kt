@@ -6,18 +6,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import kotlin.math.absoluteValue
+import android.content.res.Configuration
 
 object ContactAvatarTestTags {
     const val PHOTO = "contact_avatar_photo"
@@ -93,3 +100,27 @@ fun ContactAvatar(
 
 private fun avatarColorIndex(sender: String): Int =
     sender.hashCode().absoluteValue % initialAvatarColors.size
+
+// Spec 0035: shows all 3 fallback states side by side - photo not previewed (AsyncImage
+// needs a real network/disk load), initial-letter and generic-icon both are.
+@Composable
+private fun ContactAvatarPreviewContent() {
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ContactAvatar(displayName = "Alice", photoUri = null, sender = "+15551234")
+            ContactAvatar(displayName = null, photoUri = null, sender = "+15559876")
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ContactAvatarPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) { ContactAvatarPreviewContent() }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ContactAvatarPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) { ContactAvatarPreviewContent() }
+}

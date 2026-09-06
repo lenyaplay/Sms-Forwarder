@@ -15,20 +15,25 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.smsforwarder.gateway.data.local.db.DeliveryLogEntity
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.content.res.Configuration
 
 object DeliveryLogTestTags {
     const val EMPTY_STATE = "delivery_log_empty_state"
@@ -103,3 +108,46 @@ private fun DeliveryLogRow(entry: DeliveryLogEntity) {
 
 private fun formatTimestamp(timestampMillis: Long): String =
     SimpleDateFormat("dd.MM HH:mm:ss", Locale.getDefault()).format(Date(timestampMillis))
+
+// Spec 0035: @Preview for manual design review in Android Studio, no ViewModel/Hilt.
+private val previewDeliveryLogEntries = listOf(
+    DeliveryLogEntity(id = 1, sender = "+15551234", attemptNumber = 1, timestamp = 1_700_000_000_000L, success = true, errorMessage = null),
+    DeliveryLogEntity(id = 2, sender = "Bank", attemptNumber = 2, timestamp = 1_700_000_100_000L, success = false, errorMessage = "Connection timed out"),
+    DeliveryLogEntity(id = 3, sender = "+15559876", attemptNumber = 1, timestamp = 1_700_000_200_000L, success = true, errorMessage = null),
+)
+
+@Preview(showBackground = true)
+@Composable
+private fun DeliveryLogContentPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            DeliveryLogContent(uiState = DeliveryLogUiState(entries = previewDeliveryLogEntries), onBack = {})
+        }
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun DeliveryLogContentPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            DeliveryLogContent(uiState = DeliveryLogUiState(entries = previewDeliveryLogEntries), onBack = {})
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun DeliveryLogRowPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) { DeliveryLogRow(previewDeliveryLogEntries[1]) }
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun DeliveryLogRowPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) { DeliveryLogRow(previewDeliveryLogEntries[1]) }
+    }
+}

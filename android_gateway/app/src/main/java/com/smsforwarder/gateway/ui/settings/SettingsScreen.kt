@@ -15,10 +15,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,9 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.smsforwarder.gateway.ui.common.ConfirmDialog
+import android.content.res.Configuration
 
 object SettingsTestTags {
     const val OPEN_DELIVERY_BUTTON = "settings_open_delivery_button"
@@ -193,5 +198,22 @@ fun SettingsContent(
             },
             onDismiss = { showExportWarning = false },
         )
+    }
+}
+
+// Spec 0035: @Preview for manual design review in Android Studio, no ViewModel/Hilt.
+@Preview(showBackground = true)
+@Composable
+private fun SettingsContentPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) { SettingsContent() }
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun SettingsContentPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) { SettingsContent() }
     }
 }

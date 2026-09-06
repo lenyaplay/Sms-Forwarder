@@ -41,9 +41,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -74,8 +77,10 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import android.content.res.Configuration
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.smsforwarder.gateway.data.local.db.DeliveryStatus
 import com.smsforwarder.gateway.data.local.db.MessageDirection
@@ -617,3 +622,110 @@ private val messageTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
 private fun formatTime(timestampMillis: Long): String =
     messageTimeFormat.format(Date(timestampMillis))
+
+// Spec 0035: @Preview for manual design review in Android Studio, no ViewModel/Hilt.
+private val noopThreadActions = object : ThreadActions {
+    override fun onDraftChange(value: String) {}
+    override fun onSend() {}
+    override fun onRetry(messageId: Long) {}
+    override fun onSelectSim(subscriptionId: Int) {}
+    override fun onDeleteMessage(messageId: Long) {}
+    override fun onDeleteConversation() {}
+    override fun onToggleMessageSelection(messageId: Long) {}
+    override fun onClearSelection() {}
+    override fun onDeleteSelectedMessages() {}
+}
+
+private fun previewMessage(id: Long, direction: MessageDirection, text: String) = MessageEntity(
+    id = id,
+    sender = "+15551234",
+    text = text,
+    sentStamp = if (direction == MessageDirection.OUT) id else null,
+    receivedStamp = id,
+    simSlot = 0,
+    deliveryStatus = DeliveryStatus.SENT,
+    createdAt = id,
+    direction = direction,
+)
+
+private val previewMessages = listOf(
+    previewMessage(1L, MessageDirection.IN, "Hi, how are you?"),
+    previewMessage(2L, MessageDirection.OUT, "Doing well, thanks!"),
+    previewMessage(3L, MessageDirection.IN, "Your code is 123456"),
+)
+
+@Preview(showBackground = true)
+@Composable
+private fun ThreadContentPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ThreadContent(uiState = ThreadUiState(sender = "+15551234", messages = previewMessages), actions = noopThreadActions)
+        }
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ThreadContentPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ThreadContent(uiState = ThreadUiState(sender = "+15551234", messages = previewMessages), actions = noopThreadActions)
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun MessageBubblePreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            MessageBubble(
+                message = previewMessages[1],
+                onRetry = {},
+                isSelected = false,
+                isSelectionMode = false,
+                onToggleSelection = {},
+                showSimIndicator = true,
+                isFirstInGroup = true,
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun MessageBubblePreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            MessageBubble(
+                message = previewMessages[1],
+                onRetry = {},
+                isSelected = false,
+                isSelectionMode = false,
+                onToggleSelection = {},
+                showSimIndicator = true,
+                isFirstInGroup = true,
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun DateSeparatorRowPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            DateSeparatorRow(label = "Сегодня")
+        }
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun DateSeparatorRowPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            DateSeparatorRow(label = "Сегодня")
+        }
+    }
+}

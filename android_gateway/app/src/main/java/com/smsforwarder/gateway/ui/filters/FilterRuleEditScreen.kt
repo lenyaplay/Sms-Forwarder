@@ -16,10 +16,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -30,9 +33,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.smsforwarder.gateway.data.local.SimOption
+import android.content.res.Configuration
 
 object FilterRuleEditTestTags {
     const val SENDER_FIELD = "filter_rule_edit_sender_field"
@@ -62,7 +67,11 @@ fun FilterRuleEditScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FilterRuleEditContent(uiState: FilterRuleEditUiState, actions: FilterRuleEditActions, onBack: () -> Unit) {
+fun FilterRuleEditContent(
+    uiState: FilterRuleEditUiState,
+    actions: FilterRuleEditActions,
+    onBack: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -76,7 +85,10 @@ fun FilterRuleEditContent(uiState: FilterRuleEditUiState, actions: FilterRuleEdi
         },
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxWidth().padding(padding).padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(padding)
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             OutlinedTextField(
@@ -85,12 +97,17 @@ fun FilterRuleEditContent(uiState: FilterRuleEditUiState, actions: FilterRuleEdi
                 label = { Text("Отправитель (пусто = любой)") },
                 isError = uiState.senderPatternError != null,
                 shape = MaterialTheme.shapes.small,
-                modifier = Modifier.fillMaxWidth().testTag(FilterRuleEditTestTags.SENDER_FIELD),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(FilterRuleEditTestTags.SENDER_FIELD),
             )
             uiState.senderPatternError?.let {
                 Text(it, modifier = Modifier.testTag(FilterRuleEditTestTags.SENDER_ERROR))
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Text("Regex")
                 Switch(
                     checked = uiState.senderIsRegex,
@@ -111,12 +128,17 @@ fun FilterRuleEditContent(uiState: FilterRuleEditUiState, actions: FilterRuleEdi
                 label = { Text("Текст сообщения (пусто = любой)") },
                 isError = uiState.contentPatternError != null,
                 shape = MaterialTheme.shapes.small,
-                modifier = Modifier.fillMaxWidth().testTag(FilterRuleEditTestTags.CONTENT_FIELD),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(FilterRuleEditTestTags.CONTENT_FIELD),
             )
             uiState.contentPatternError?.let {
                 Text(it, modifier = Modifier.testTag(FilterRuleEditTestTags.CONTENT_ERROR))
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Text("Regex")
                 Switch(
                     checked = uiState.contentIsRegex,
@@ -125,7 +147,10 @@ fun FilterRuleEditContent(uiState: FilterRuleEditUiState, actions: FilterRuleEdi
                 )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Text("Включено")
                 Switch(
                     checked = uiState.enabled,
@@ -153,7 +178,9 @@ private fun SimPicker(
     onSelected: (Int?) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selectedLabel = availableSims.find { it.subscriptionId == selectedSubscriptionId }?.displayName ?: "Любая SIM"
+    val selectedLabel =
+        availableSims.find { it.subscriptionId == selectedSubscriptionId }?.displayName
+            ?: "Любая SIM"
 
     Column(modifier = Modifier.testTag(FilterRuleEditTestTags.SIM_DROPDOWN)) {
         TextButton(onClick = { expanded = true }) { Text(selectedLabel) }
@@ -168,6 +195,79 @@ private fun SimPicker(
                     onClick = { onSelected(sim.subscriptionId); expanded = false },
                 )
             }
+        }
+    }
+}
+
+// Spec 0035: @Preview for manual design review in Android Studio, no ViewModel/Hilt.
+// heightDp=800: FilterRuleEditContent doesn't scroll but is taller than the default
+// preview viewport, matching FilterRuleEditScreenSnapshotTest's own @Config rationale.
+private val noopFilterRuleEditActions = object : FilterRuleEditActions {
+    override fun onSenderPatternChange(value: String) {}
+    override fun onSenderIsRegexChange(value: Boolean) {}
+    override fun onSubscriptionIdChange(value: Int?) {}
+    override fun onContentPatternChange(value: String) {}
+    override fun onContentIsRegexChange(value: Boolean) {}
+    override fun onEnabledChange(value: Boolean) {}
+    override fun onSave() {}
+}
+
+private val previewFilterRuleEditUiState = FilterRuleEditUiState(
+    senderPattern = "+15551234",
+    availableSims = listOf(
+        SimOption(subscriptionId = 1, slotIndex = 0, displayName = "SIM 1"),
+        SimOption(subscriptionId = 2, slotIndex = 1, displayName = "SIM 2"),
+    ),
+)
+
+@Preview(showBackground = true, heightDp = 800)
+@Composable
+private fun FilterRuleEditContentPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            FilterRuleEditContent(
+                uiState = previewFilterRuleEditUiState,
+                actions = noopFilterRuleEditActions,
+                onBack = {})
+        }
+    }
+}
+
+@Preview(showBackground = true, heightDp = 800, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun FilterRuleEditContentPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            FilterRuleEditContent(
+                uiState = previewFilterRuleEditUiState,
+                actions = noopFilterRuleEditActions,
+                onBack = {})
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun SimPickerPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            SimPicker(
+                availableSims = previewFilterRuleEditUiState.availableSims,
+                selectedSubscriptionId = 1,
+                onSelected = {})
+        }
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun SimPickerPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            SimPicker(
+                availableSims = previewFilterRuleEditUiState.availableSims,
+                selectedSubscriptionId = 1,
+                onSelected = {})
         }
     }
 }

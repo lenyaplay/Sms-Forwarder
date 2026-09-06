@@ -1,6 +1,5 @@
 package com.smsforwarder.gateway.ui.filters
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,13 +27,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,12 +43,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.smsforwarder.gateway.data.local.db.FilterMode
 import com.smsforwarder.gateway.data.local.db.FilterRuleEntity
 import com.smsforwarder.gateway.data.local.db.FilterStage
 import com.smsforwarder.gateway.ui.common.ConfirmDialog
+import com.smsforwarder.gateway.ui.common.SwipeAction
+import com.smsforwarder.gateway.ui.common.SwipeActionsRow
+import android.content.res.Configuration
 
 object FilterRulesTestTags {
     const val TAB_RECEPTION = "filter_rules_tab_reception"
@@ -65,6 +68,7 @@ object FilterRulesTestTags {
     fun moveUpButton(id: Long) = "filter_rules_move_up_$id"
     fun moveDownButton(id: Long) = "filter_rules_move_down_$id"
     fun deleteButton(id: Long) = "filter_rules_delete_$id"
+    fun swipeDeleteButton(id: Long) = "filter_rules_swipe_delete_$id"
 }
 
 @Composable
@@ -197,29 +201,20 @@ private fun FilterRuleRow(
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
 ) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        // Default (0.5) triggers on a fairly short drag - raised so an accidental
-        // sideways scroll doesn't fire delete; the IconButton below is the
-        // non-gesture equivalent (swipe-to-dismiss has no built-in a11y action).
-        positionalThreshold = { totalDistance -> totalDistance * 0.75f },
-        confirmValueChange = { value ->
-            when (value) {
-                SwipeToDismissBoxValue.EndToStart -> onDeleteRequested()
-                else -> Unit
-            }
-            false
-        },
-    )
-    SwipeToDismissBox(
-        state = dismissState,
-        backgroundContent = {
-            Box(
-                modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.errorContainer).padding(horizontal = 20.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Icon(Icons.Default.Delete, contentDescription = null)
-            }
-        },
+    // Spec 0036: replaced Material3's SwipeToDismissBox (dismiss-on-swipe) with a
+    // reveal gesture - swipe left pins a circular delete button open instead of
+    // deleting immediately; the dedicated IconButton below remains the sole
+    // non-gesture/a11y path.
+    SwipeActionsRow(
+        actions = listOf(
+            SwipeAction(
+                icon = Icons.Default.Delete,
+                contentDescription = "Удалить правило",
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                testTag = FilterRulesTestTags.swipeDeleteButton(rule.id),
+                onClick = onDeleteRequested,
+            ),
+        ),
     ) {
         Card(
             modifier = Modifier
@@ -284,4 +279,104 @@ private fun ruleSummary(rule: FilterRuleEntity): String {
         rule.contentPattern?.takeIf { it.isNotEmpty() }?.let { add("Текст: $it${if (rule.contentIsRegex) " (regex)" else ""}") }
     }
     return if (parts.isEmpty()) "Любое сообщение" else parts.joinToString(", ")
+}
+
+// Spec 0035: @Preview for manual design review in Android Studio, no ViewModel/Hilt.
+private val noopFilterRulesActions = object : FilterRulesActions {
+    override fun onTabSelected(stage: FilterStage) {}
+    override fun onModeChange(mode: FilterMode) {}
+    override fun onToggleEnabled(rule: FilterRuleEntity) {}
+    override fun onDeleteRule(id: Long) {}
+    override fun onMoveUp(rule: FilterRuleEntity) {}
+    override fun onMoveDown(rule: FilterRuleEntity) {}
+}
+
+private fun previewFilterRule(id: Long, senderPattern: String?, sortOrder: Int) = FilterRuleEntity(
+    id = id,
+    stage = FilterStage.RECEPTION,
+    senderPattern = senderPattern,
+    senderIsRegex = false,
+    subscriptionId = null,
+    contentPattern = null,
+    contentIsRegex = false,
+    enabled = true,
+    sortOrder = sortOrder,
+)
+
+private val previewFilterRules = listOf(
+    previewFilterRule(1, "+15551234", 0),
+    previewFilterRule(2, "Bank", 1),
+    previewFilterRule(3, null, 2),
+)
+
+@Preview(showBackground = true)
+@Composable
+private fun FilterRulesContentPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            FilterRulesContent(
+                uiState = FilterRulesUiState(rules = previewFilterRules),
+                actions = noopFilterRulesActions,
+                onBack = {},
+                onAddRule = {},
+                onEditRule = { _, _ -> },
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun FilterRulesContentPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            FilterRulesContent(
+                uiState = FilterRulesUiState(rules = previewFilterRules),
+                actions = noopFilterRulesActions,
+                onBack = {},
+                onAddRule = {},
+                onEditRule = { _, _ -> },
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun FilterRuleRowPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            FilterRuleRow(
+                rule = previewFilterRules[0],
+                isSimUnavailable = false,
+                canMoveUp = false,
+                canMoveDown = true,
+                onClick = {},
+                onToggleEnabled = {},
+                onDeleteRequested = {},
+                onMoveUp = {},
+                onMoveDown = {},
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun FilterRuleRowPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            FilterRuleRow(
+                rule = previewFilterRules[0],
+                isSimUnavailable = false,
+                canMoveUp = false,
+                canMoveDown = true,
+                onClick = {},
+                onToggleEnabled = {},
+                onDeleteRequested = {},
+                onMoveUp = {},
+                onMoveDown = {},
+            )
+        }
+    }
 }

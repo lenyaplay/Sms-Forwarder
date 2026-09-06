@@ -18,10 +18,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -33,11 +36,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.work.BackoffPolicy
 import com.smsforwarder.gateway.data.remote.TestConnectionResult
 import com.smsforwarder.gateway.ui.common.ConfirmDialog
+import android.content.res.Configuration
 
 object DeliveryTestTags {
     const val SERVER_URL_FIELD = "delivery_server_url_field"
@@ -265,5 +270,52 @@ fun DeliveryContent(uiState: DeliveryUiState, actions: DeliveryActions, onBack: 
             },
             onDismiss = { showResetConfirm = false },
         )
+    }
+}
+
+// Spec 0035: @Preview for manual design review in Android Studio, no ViewModel/Hilt.
+// heightDp=1200: DeliveryContent scrolls internally, but a taller preview viewport
+// shows the whole form (including Save/Reset buttons) at once without scrolling in
+// the IDE - matches DeliveryScreenSnapshotTest's own @Config(qualifiers) rationale.
+private val previewDeliveryUiState = DeliveryUiState(
+    serverUrl = "https://sms.example.com",
+    uploadToken = "abc123def456",
+    maxAttempts = "5",
+    baseIntervalSeconds = "60",
+    backoffPolicy = BackoffPolicy.EXPONENTIAL,
+    testConnectionResult = TestConnectionResult.Success(httpCode = 200),
+)
+
+private val noopDeliveryActions = object : DeliveryActions {
+    override fun onServerUrlChange(value: String) {}
+    override fun onUploadTokenChange(value: String) {}
+    override fun onMaxAttemptsChange(value: String) {}
+    override fun onBaseIntervalSecondsChange(value: String) {}
+    override fun onBackoffPolicyChange(value: BackoffPolicy) {}
+    override fun onForwardingPausedChange(value: Boolean) {}
+    override fun onDeleteAfterForwardChange(value: Boolean) {}
+    override fun onHideContactNameInPayloadChange(value: Boolean) {}
+    override fun onSave() {}
+    override fun onTestConnection() {}
+    override fun onResetDeliverySettings() {}
+}
+
+@Preview(showBackground = true, heightDp = 1200)
+@Composable
+private fun DeliveryContentPreviewLight() {
+    MaterialTheme(colorScheme = lightColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            DeliveryContent(uiState = previewDeliveryUiState, actions = noopDeliveryActions, onBack = {})
+        }
+    }
+}
+
+@Preview(showBackground = true, heightDp = 1200, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun DeliveryContentPreviewDark() {
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            DeliveryContent(uiState = previewDeliveryUiState, actions = noopDeliveryActions, onBack = {})
+        }
     }
 }
